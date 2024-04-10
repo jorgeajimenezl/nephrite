@@ -2,12 +2,13 @@ import argparse
 from asyncio import run
 
 import yaml
-from algorithms import *
+from algorithms import EchoAlgorithm, RingElection
 from algorithms.blockchain import BlockchainNode
-from da_types import Blockchain
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs
 from ipv8.util import create_event_with_signals
 from ipv8_service import IPv8
+
+from nepherite.base import Blockchain
 
 
 def get_algorithm(name: str) -> Blockchain:
@@ -16,7 +17,7 @@ def get_algorithm(name: str) -> Blockchain:
         "election": RingElection,
         "blockchain": BlockchainNode,
     }
-    if name not in algorithms.keys():
+    if name not in algorithms:
         raise Exception(f"Cannot find select algorithm with name {name}")
     return algorithms[name]
 
@@ -63,7 +64,7 @@ if __name__ == "__main__":
     node_id = args.node_id
 
     alg = get_algorithm(args.algorithm)
-    with open(args.topology, "r") as f:
+    with open(args.topology) as f:
         topology = yaml.safe_load(f)
         connections = topology[node_id]
 

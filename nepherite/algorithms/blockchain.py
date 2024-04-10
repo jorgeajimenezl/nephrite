@@ -1,13 +1,12 @@
 import random
 from collections import defaultdict
+from dataclasses import dataclass
 
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import overwrite_dataclass
-from dataclasses import dataclass
-
 from ipv8.types import Peer
 
-from da_types import Blockchain, message_wrapper
+from nepherite.base import Blockchain, message_wrapper
 
 # We are using a custom dataclass implementation.
 dataclass = overwrite_dataclass(dataclass)
