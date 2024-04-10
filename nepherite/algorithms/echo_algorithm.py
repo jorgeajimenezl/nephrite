@@ -41,8 +41,10 @@ class EchoAlgorithm(Blockchain):
         sender_id = self.node_id_from_peer(peer)
         self.echo_counter = payload.counter + 1
         if self.echo_counter >= self.max_echo_count:
-            print(f'Node {self.node_id} is stopping')
+            print(f"Node {self.node_id} is stopping")
             self.stop()
-        print(f'[Node {self.node_id}] Got a message from node: {sender_id}.\t current counter: {self.echo_counter}')
+        print(
+            f"[Node {self.node_id}] Got a message from node: {sender_id}.\t current counter: {self.echo_counter}"
+        )
         # Then synchronize with the rest of the network again.
         self.ez_send(peer, MyMessage(self.echo_counter))

@@ -20,9 +20,7 @@ class ElectionMessage:
     elector: int
 
 
-@dataclass(
-    msg_id=2
-)
+@dataclass(msg_id=2)
 class TerminationMessage:
     terminate: bool = True
 
@@ -46,13 +44,17 @@ class RingElection(Blockchain):
         await asyncio.sleep(random.uniform(1.0, 3.0))
         if not self.running:
             peer = list(self.nodes.values())[0]
-            print(f'[Node {self.node_id}] Starting by selecting a node: {self.node_id_from_peer(peer)}')
+            print(
+                f"[Node {self.node_id}] Starting by selecting a node: {self.node_id_from_peer(peer)}"
+            )
             self.ez_send(peer, ElectionMessage(self.node_id))
 
     @message_wrapper(TerminationMessage)
     async def on_terminate(self, peer: Peer, _: TerminationMessage) -> None:
         if self.running:
-            _next_node_id, next_peer = [x for x in self.nodes.items() if x[1] != peer][0]
+            _next_node_id, next_peer = [x for x in self.nodes.items() if x[1] != peer][
+                0
+            ]
             self.ez_send(next_peer, TerminationMessage())
             self.running = False
             self.stop()
@@ -62,14 +64,16 @@ class RingElection(Blockchain):
         self.running = True
         # Sending it around the ring to the other peer we received it from.
         next_node_id, next_peer = [x for x in self.nodes.items() if x[1] != peer][0]
-        print(f'[Node {self.node_id}] Got a message from with elector id: {payload.elector}')
+        print(
+            f"[Node {self.node_id}] Got a message from with elector id: {payload.elector}"
+        )
 
         received_id = payload.elector
 
         if received_id == self.node_id:
             # We are elected
-            print(f'[Node {self.node_id}] we are elected!')
-            print(f'[Node {self.node_id}] Sending message to terminate the algorithm!')
+            print(f"[Node {self.node_id}] we are elected!")
+            print(f"[Node {self.node_id}] Sending message to terminate the algorithm!")
 
             self.ez_send(next_peer, TerminationMessage())
         elif received_id < self.node_id:

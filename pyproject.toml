@@ -61,8 +61,8 @@ exclude = [
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["A", "B", "C4", "E", "F", "I001", "SIM", "T201", "UP"]
-ignore = ["E501", "B008"]
+select = ["A", "B", "C4", "E", "F", "I001", "SIM", "UP"]
+ignore = ["E501", "B008", "T201"]
 unfixable = ["B"]
 
 
