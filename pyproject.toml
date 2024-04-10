@@ -1,0 +1,107 @@
+[tool.poetry]
+name = "nepherite"
+version = "0.1.0"
+description = ""
+authors = [
+    "Jorge Jiménez <jorgeajimenezl17@gmail.com>",
+    "Mariano Cisneros <mjasonrc@gmail.com>",
+    "Victor Lopez <victor.98.javier@gmail.com>",
+]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pyipv8 = "2.13.0"
+typing_extensions = "*"
+python-dotenv = "^1.0.1"
+pyyaml = "*"
+trio = "0.25.0"
+
+
+[tool.poetry.group.dev.dependencies]
+bandit = "^1.7.7"
+mypy = "^1.8.0"
+pre-commit = "^3.6.0"
+pytest = "^8.0.0"
+ruff = "^0.2.0"
+
+[tool.ruff]
+line-length = 88
+output-format = "full"
+
+exclude = [
+    # Commonly ignored dirs
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["A", "B", "C4", "E", "F", "I001", "SIM", "T201", "UP"]
+ignore = ["E501", "B008"]
+unfixable = ["B"]
+
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+
+
+[tool.pytest]
+python_file = "tests.py test_*.py *_tests.py"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.11"
+show_error_codes = true
+strict = true
+disallow_untyped_calls = false
+disallow_any_generics = false
+warn_return_any = false
+ignore_missing_imports = true
+disable_error_code = "abstract"
+
+[tool.bandit]
+exclude_dirs = ['*/tests.py', '*/tests/*']
+
+
+[tool.coverage.paths]
+source = ["nepherite/"]
+
+[tool.coverage.run]
+source = ["nepherite/"]
+omit = ["**/tests/*", "**/__init__.py"]
+
+[tool.coverage.report]
+show_missing = true
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
