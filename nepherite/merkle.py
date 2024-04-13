@@ -15,7 +15,7 @@ class MerkleTree:
 
     def build_tree(self, l: int, r: int) -> Node:  # noqa: E741
         if l == r:
-            return MerkleTree.Node(sha256(self.items[l]), None, None)
+            return MerkleTree.Node(self.items[l], None, None)
 
         m = (l + r) >> 1
         left = self.build_tree(l, m)
@@ -24,14 +24,17 @@ class MerkleTree:
 
     def get_verify_data(self, index: int) -> list[bytes]:  # noqa: A002
         res = []
-        l = 0  # noqa: E741
-        r = len(self.items) - 1
-        while l < r:
-            m = (l + r) >> 1
+        node = self.root
+        left = 0  # noqa: E741
+        right = len(self.items) - 1
+        while left < right:
+            m = (left + right) >> 1
             if index <= m:
-                res.append(self.items[m + 1])
-                r = m
+                res.append(node.right.hash)
+                node = node.left
+                right = m
             else:
-                res.append(self.items[l])
-                l = m + 1  # noqa: E741
+                res.append(node.left.hash)
+                node = node.right
+                left = m + 1  # noqa: E741
         return res
