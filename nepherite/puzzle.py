@@ -1,8 +1,8 @@
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 Answer = TypeVar("Answer")
 
-class Puzzle:
+class Puzzle(Generic[Answer]):
     @staticmethod
     def compute(data: bytes) -> Answer:
         pass
