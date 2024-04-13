@@ -22,19 +22,19 @@ class MerkleTree:
         right = self.build_tree(m + 1, r)
         return MerkleTree.Node(sha256(left.hash + right.hash), left, right)
 
-    def get_verify_data(self, index: int) -> list[bytes]:  # noqa: A002
-        res = []
-        node = self.root
-        left = 0  # noqa: E741
-        right = len(self.items) - 1
-        while left < right:
-            m = (left + right) >> 1
-            if index <= m:
-                res.append(node.right.hash)
-                node = node.left
-                right = m
-            else:
-                res.append(node.left.hash)
-                node = node.right
-                left = m + 1  # noqa: E741
-        return res
+    # def get_verify_data(self, index: int) -> list[bytes]:  # noqa: A002
+    #     res = []
+    #     node = self.root
+    #     left = 0  # noqa: E741
+    #     right = len(self.items) - 1
+    #     while left < right:
+    #         m = (left + right) >> 1
+    #         if index <= m:
+    #             res.append(node.right.hash)
+    #             node = node.left
+    #             right = m
+    #         else:
+    #             res.append(node.left.hash)
+    #             node = node.right
+    #             left = m + 1  # noqa: E741
+    #     return res
