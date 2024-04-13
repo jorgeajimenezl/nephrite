@@ -16,8 +16,20 @@ Idea:
     easy to check , only multiply x and A that retuns y, and that A containg
     W in the upper left part.
 '''
-
 import numpy as np
 
 def linear_equation_check(y: np.ndarray, A: np.ndarray, x: np.ndarray) -> bool:
-    pass
+    try:
+        can_pass = len(A.shape) == 2 and \
+                len(y.shape) == 1 and \
+                len(x.shape) == 1 and \
+                A.shape[0] == y.shape[0] and \
+                A.shape[1] == x.shape[0]
+
+        if not can_pass:
+            return False
+
+        y_hat = A @ x
+        return np.array_equal(y, y_hat)
+    except:
+        return False
