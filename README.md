@@ -4,6 +4,9 @@ This Python implementation serves as a basic introduction to blockchain technolo
 
 ## Authors
 
+**Evaluation method:** as a team.
+
+
 - Jorge Jiménez <<jorgeajimenezl17@gmail.com>>
 - Mariano Rodriguez <<mjasonrc@gmail.com>>
 - Victor Lopez <<victor.98.javier@gmail.com>>
