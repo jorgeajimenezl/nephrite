@@ -1,14 +1,25 @@
-from typing import Generic, TypeVar
+from typing import Tuple
+import hashlib
 
 from nepherite.utils import sha256
 
 DIFFICULTY = 5
 Answer = TypeVar("Answer")
 
-class Puzzle(Generic[Answer]):
+class Puzzle:
     @staticmethod
     def compute(data: bytes) -> Answer:
-        pass
+        nonce = 0
+        prefix = '0' * DIFFICULTY
+        while True:
+            data_app = data + nonce.to_bytes(4, byteorder='big')  # Use 4 bytes for nonce
+            
+            hash_value = hashlib.sha256(data_app).hexdigest()
+            
+            if hash_value.startswith(prefix):
+                return nonce, hash_value
+            
+            nonce += 1
     
     @staticmethod
     def verify(data: bytes, answer: Answer) -> bool:
