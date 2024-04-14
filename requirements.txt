@@ -27,4 +27,4 @@ trio==0.25.0 ; python_version >= "3.11" and python_version < "4.0"
 typing-extensions==4.11.0 ; python_version >= "3.11" and python_version < "4.0"
 webargs==5.5.3 ; python_version >= "3.11" and python_version < "4.0"
 yarl==1.9.4 ; python_version >= "3.11" and python_version < "4.0"
-numpy==1.26.4
+numpy==1.26.4 ; python_version >= "3.11" and python_version < "4.0"
