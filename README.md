@@ -26,14 +26,22 @@ Nodes within the network are required to establish a minimum of 8 connections an
 - **Pull**: To find and receive data from other nodes, we opt for a traditional parent structure for the pull messages. That is, each pull message will contain the sender (parent) to trace back the route to the original sender.
 - Messages will only be repeated 3 times.
 
-
 ## Block Structure
 
 ![Block Structure](/imgs/drawing.png)
 
 ## Tests
 
+## Limitations
+
 ## Progress
 ### Week 1
 
-- [ ] a
+- [x] Consensus puzzle
+- [ ] Verify Transaction Functionality
+- [ ] Verify Block Functionality
+- [ ] Test of 100 peers per team integrant
+- [ ] Functional Transaction
+- [ ] Functional Verified Chain of Minimun 3 Blocks
+- [x] Local Database per peer
+- [x] Week 1 report
