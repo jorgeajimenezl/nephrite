@@ -1,3 +1,5 @@
+import asyncio
+import os
 import time
 from collections import defaultdict
 
@@ -14,6 +16,7 @@ from nepherite.utils import sha256
 BLOCK_SIZE = 16
 BLOCK_REWARD = 100
 BLOCK_DIFFICULTY = 6
+RETRY_COUNT = 3
 
 
 @dataclass
@@ -27,6 +30,7 @@ class Transaction:
     timestamp: int
     input: list[Utxo]
     output: list[Utxo]
+    sign: bytes
 
 
 @dataclass(msg_id=2)
@@ -49,7 +53,13 @@ class Block:
 @dataclass(msg_id=4)
 class PullBlockRequest:
     block_hash: bytes
-    peer_id: bytes
+    address: tuple[str, int]
+    nonce: int
+
+
+@dataclass(msg_id=5)
+class PullBlockAck:
+    nonce: int
 
 
 class NepheriteNode(Blockchain):
@@ -57,10 +67,11 @@ class NepheriteNode(Blockchain):
         super().__init__(settings)
 
         self.next_blocks: dict[bytes, list[bytes]] = defaultdict(list)
-        self.verified_blocks: set[bytes] = set()
+        self.blocks: dict[bytes, Block] = set()
         self.mempool: list[Transaction] = []
-        self.blocks: dict[bytes, BlockHeader] = {}
+        self.blocks_info: dict[bytes, BlockHeader] = {}
         self.last_seq_num = 0
+        self.events: dict[int, asyncio.Event] = {}
 
         options = Options(raw_mode=False)
         self.chainstate = Rdict("data/chainstate.db", options=options)
@@ -104,27 +115,27 @@ class NepheriteNode(Blockchain):
         # Puzzle solved?
         if not Puzzle.verify(blob, header.nonce):
             return False
-        
+
         # No double spending?
-        if  any(not self.verify_transaction(tx) for tx in block.transactions):
+        if any(not self.verify_transaction(tx) for tx in block.transactions):
             return False
-        
+
         # Correct difficulty?
         if block.header.difficulty != BLOCK_DIFFICULTY:
             return False
-        
+
         # Correct previous block?
-        if prev_block := self.blocks.get(header.prev_block_hash):
+        if prev_block := self.blocks_info.get(header.prev_block_hash):
             if prev_block.seq_num + 1 != header.seq_num:
                 return False
         else:
             return False
-        
+
         # Correct merkle root?
         tree = MerkleTree(block.transactions)
         if tree.root.hash != header.merkle_root_hash:
             return False
-        
+
         return True
 
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
@@ -139,13 +150,21 @@ class NepheriteNode(Blockchain):
     @message_wrapper(BlockHeader)
     def on_block_header(self, peer: Peer, block_header: BlockHeader) -> None:
         block_hash = self.get_block_hash(block_header)
-        if block_hash in self.blocks:
+        if block_hash in self.blocks_info:
             return
 
+        # Broadcast block header over the network
         self.next_blocks[block_header.prev_block_hash].append(block_header)
-        self.blocks[block_hash] = block_header
+        self.blocks_info[block_hash] = block_header
         for u in self.get_peers():
             self.ez_send(u, block_header)
+
+        # If we that block seams to be the next one, request the full block
+        if block_header.seq_num >= self.last_seq_num:
+            nonce = int.from_bytes(os.urandom(8))
+            self.ez_send(peer, PullBlockRequest(block_hash, self.my_peer.mid, nonce))
+
+        # TODO: stuff with next_blocks
 
     def build_block(self) -> Block:
         previous_block = self.load_block(self.last_seq_num)
@@ -172,13 +191,30 @@ class NepheriteNode(Blockchain):
         # TODO: Implement mining
         ...
 
-    # @message_wrapper(PullBlockRequest)
-    # def on_pull_block_request(self, peer: Peer, request: PullBlockRequest) -> None:
-    #     block_hash = request.block_hash
-    #     if block_hash not in self.blocks:
-    #         self.parent[block_hash] = peer
-    #         # broadcast pull request
-    #         for u in self.get_peers():
-    #             self.ez_send(u, request)
-    #     block = self.blocks[block_hash]
-    #     self.ez_send(peer, block)
+    @message_wrapper(PullBlockAck)
+    def on_pull_block_response(self, peer: Peer, response: PullBlockAck) -> None:
+        if event := self.events.get(response.nonce):
+            event.set()
+
+    @message_wrapper(PullBlockRequest)
+    async def on_pull_block_request(
+        self, peer: Peer, request: PullBlockRequest
+    ) -> None:
+        block_hash = request.block_hash
+        if block_hash not in self.blocks:
+            for u in self.get_peers():
+                self.ez_send(u, request)
+            return
+
+        block = self.blocks[block_hash]
+        self.events[request.nonce] = asyncio.Event()
+        cnt = RETRY_COUNT
+
+        while cnt > 0:
+            self.walk_to(request.address)
+            async with asyncio.timeout(5):
+                await self.events[request.nonce].wait()
+                self.ez_send(peer, block)
+            if self.events[request.nonce].is_set():
+                break
+            cnt -= 1

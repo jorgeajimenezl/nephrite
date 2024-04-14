@@ -10,8 +10,8 @@ This Python implementation serves as a basic introduction to blockchain technolo
 - Jorge Jiménez <<jorgeajimenezl17@gmail.com>>
 - Mariano Rodriguez <<mjasonrc@gmail.com>>
 - Victor Lopez <<victor.98.javier@gmail.com>>
-- Samuel Suares<<samueldsr8@gmail.com>>
-- Fernando Valdes<<>>
+- Samuel Suares <<samueldsr8@gmail.com>>
+- Fernando Valdes <<>>
 
 ## System
 
