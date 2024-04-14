@@ -3,11 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Data
+data/
+
+test*mj.py
+
+
 # C extensions
 *.so
-
-test*mj*.py
-
+.idea
 # Deployment files
 docker-compose.yml
 

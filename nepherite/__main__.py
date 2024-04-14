@@ -3,7 +3,7 @@ from asyncio import run
 
 import yaml
 from algorithms import EchoAlgorithm, RingElection
-from algorithms.blockchain import BlockchainNode
+from nepherite.node import BlockchainNode
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs
 from ipv8.util import create_event_with_signals
 from ipv8_service import IPv8
@@ -23,7 +23,10 @@ def get_algorithm(name: str) -> Blockchain:
 
 
 async def start_communities(
-    node_id, connections, algorithm, use_localhost=True
+    node_id: int,
+    connections: list[int],
+    algorithm: Blockchain,
+    use_localhost: bool = True,
 ) -> None:
     event = create_event_with_signals()
     base_port = 9090
@@ -59,7 +62,7 @@ if __name__ == "__main__":
         "topology", type=str, nargs="?", default="topologies/default.yaml"
     )
     parser.add_argument("algorithm", type=str, nargs="?", default="echo")
-    parser.add_argument("-docker", action="store_true")
+    parser.add_argument("--docker", action="store_true")
     args = parser.parse_args()
     node_id = args.node_id
 

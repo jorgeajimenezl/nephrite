@@ -16,6 +16,8 @@ typing_extensions = "*"
 python-dotenv = "^1.0.1"
 pyyaml = "*"
 trio = "0.25.0"
+cryptography = "^42.0.5"
+rocksdict = "^0.3.23"
 
 
 [tool.poetry.group.dev.dependencies]

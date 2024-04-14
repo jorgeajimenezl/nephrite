@@ -21,7 +21,7 @@ def message_wrapper(
 
 
 class Blockchain(Community):
-    community_id = b"\x05" * 20
+    community_id = b"matadores_ledgers"
 
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
