@@ -45,3 +45,6 @@ Nodes within the network are required to establish a minimum of 8 connections an
 - [ ] Functional Verified Chain of Minimun 3 Blocks
 - [x] Local Database per peer
 - [x] Week 1 report
+
+### Week 2
+WIP
