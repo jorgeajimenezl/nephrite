@@ -1,15 +1,14 @@
 import time
 from collections import defaultdict
-from dataclasses import dataclass
 
 from ipv8.community import CommunitySettings
-from ipv8.messaging.payload_dataclass import dataclass as payload_dataclass
+from ipv8.messaging.payload_dataclass import dataclass
 from ipv8.types import Peer
 from rocksdict import Options, Rdict
 
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
-from nepherite.puzzle import Puzzle
+from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import sha256
 
 BLOCK_SIZE = 16
@@ -23,14 +22,14 @@ class Utxo:
     amount: int
 
 
-@payload_dataclass(msg_id=1)
+@dataclass(msg_id=1)
 class Transaction:
     timestamp: int
     input: list[Utxo]
     output: list[Utxo]
 
 
-@payload_dataclass(msg_id=2)
+@dataclass(msg_id=2)
 class BlockHeader:
     seq_num: int
     version: int
@@ -41,13 +40,13 @@ class BlockHeader:
     nonce: int
 
 
-@payload_dataclass(msg_id=3)
+@dataclass(msg_id=3)
 class Block:
     header: BlockHeader
     transactions: list[Transaction]
 
 
-@payload_dataclass(msg_id=4)
+@dataclass(msg_id=4)
 class PullBlockRequest:
     block_hash: bytes
     peer_id: bytes
@@ -58,6 +57,7 @@ class NepheriteNode(Blockchain):
         super().__init__(settings)
 
         self.next_blocks: dict[bytes, list[bytes]] = defaultdict(list)
+        self.verified_blocks: set[bytes] = set()
         self.mempool: list[Transaction] = []
         self.blocks: dict[bytes, BlockHeader] = {}
         self.last_seq_num = 0
@@ -96,12 +96,36 @@ class NepheriteNode(Blockchain):
 
         # TODO: fee stuff (ask teacher)
         return sum_in >= sum_out
-    
+
     def verify_block(self, block: Block) -> bool:
         header = block.header
-        
-        block_hash = self.get_block_hash(header)
+        blob = self.serializer.pack_serializable(header)
 
+        # Puzzle solved?
+        if not Puzzle.verify(blob, header.nonce):
+            return False
+        
+        # No double spending?
+        if  any(not self.verify_transaction(tx) for tx in block.transactions):
+            return False
+        
+        # Correct difficulty?
+        if block.header.difficulty != BLOCK_DIFFICULTY:
+            return False
+        
+        # Correct previous block?
+        if prev_block := self.blocks.get(header.prev_block_hash):
+            if prev_block.seq_num + 1 != header.seq_num:
+                return False
+        else:
+            return False
+        
+        # Correct merkle root?
+        tree = MerkleTree(block.transactions)
+        if tree.root.hash != header.merkle_root_hash:
+            return False
+        
+        return True
 
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
         if not self.verify_transaction(transaction):
