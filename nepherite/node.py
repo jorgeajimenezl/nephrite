@@ -1,12 +1,20 @@
+import time
+from collections import defaultdict
 from dataclasses import dataclass
 
-from cryptography.hazmat.primitives import hashes
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import dataclass as payload_dataclass
 from ipv8.types import Peer
 from rocksdict import Options, Rdict
 
 from nepherite.base import Blockchain, message_wrapper
+from nepherite.merkle import MerkleTree
+from nepherite.puzzle import Puzzle
+from nepherite.utils import sha256
+
+BLOCK_SIZE = 16
+BLOCK_REWARD = 100
+BLOCK_DIFFICULTY = 6
 
 
 @dataclass
@@ -37,7 +45,6 @@ class BlockHeader:
 class Block:
     header: BlockHeader
     transactions: list[Transaction]
-    msg_response: int
 
 
 @payload_dataclass(msg_id=4)
@@ -46,18 +53,14 @@ class PullBlockRequest:
     peer_id: bytes
 
 
-def sha256(data: bytes) -> bytes:
-    digest = hashes.Hash(hashes.SHA3_256())
-    digest.update(data)
-    return digest.finalize()
-
-
 class NepheriteNode(Blockchain):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
 
-        self.parent: dict[bytes, bytes] = {}
+        self.next_blocks: dict[bytes, list[bytes]] = defaultdict(list)
         self.mempool: list[Transaction] = []
+        self.blocks: dict[bytes, BlockHeader] = {}
+        self.last_seq_num = 0
 
         options = Options(raw_mode=False)
         self.chainstate = Rdict("data/chainstate.db", options=options)
@@ -93,31 +96,65 @@ class NepheriteNode(Blockchain):
 
         # TODO: fee stuff (ask teacher)
         return sum_in >= sum_out
+    
+    def verify_block(self, block: Block) -> bool:
+        header = block.header
+        
+        block_hash = self.get_block_hash(header)
+
 
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
         if not self.verify_transaction(transaction):
             return
-        
+
         self.mempool.append(transaction)
         # broadcast transaction
         for u in self.get_peers():
             self.ez_send(u, transaction)
 
     @message_wrapper(BlockHeader)
-    def on_block_header(self, peer: Peer, header: BlockHeader) -> None:
-        block_hash = self.get_block_hash(header)
+    def on_block_header(self, peer: Peer, block_header: BlockHeader) -> None:
+        block_hash = self.get_block_hash(block_header)
         if block_hash in self.blocks:
             return
 
-        # TODO: Update values and validate
+        self.next_blocks[block_header.prev_block_hash].append(block_header)
+        self.blocks[block_hash] = block_header
+        for u in self.get_peers():
+            self.ez_send(u, block_header)
 
-    @message_wrapper(PullBlockRequest)
-    def on_pull_block_request(self, peer: Peer, request: PullBlockRequest) -> None:
-        block_hash = request.block_hash
-        if block_hash not in self.blocks:
-            self.parent[block_hash] = peer
-            # broadcast pull request
-            for u in self.get_peers():
-                self.ez_send(u, request)
-        block = self.blocks[block_hash]
-        self.ez_send(peer, block)
+    def build_block(self) -> Block:
+        previous_block = self.load_block(self.last_seq_num)
+        transactions = self.mempool[:BLOCK_SIZE]
+        tree = MerkleTree(transactions)
+
+        header = BlockHeader(
+            seq_num=self.last_seq_num + 1,
+            version=1,
+            prev_block_hash=previous_block.header.prev_block_hash,
+            merkle_root_hash=tree.root.hash,
+            timestamp=time.monotonic_ns() // 1_000,
+            difficulty=BLOCK_DIFFICULTY,
+            nonce=0,
+        )
+
+        return Block(header, transactions)
+
+    def mine_block(self) -> Block:
+        block = self.build_block()
+        blob = self.serializer.pack_serializable(block)
+        answer = Puzzle.compute(blob)
+
+        # TODO: Implement mining
+        ...
+
+    # @message_wrapper(PullBlockRequest)
+    # def on_pull_block_request(self, peer: Peer, request: PullBlockRequest) -> None:
+    #     block_hash = request.block_hash
+    #     if block_hash not in self.blocks:
+    #         self.parent[block_hash] = peer
+    #         # broadcast pull request
+    #         for u in self.get_peers():
+    #             self.ez_send(u, request)
+    #     block = self.blocks[block_hash]
+    #     self.ez_send(peer, block)
