@@ -2,24 +2,12 @@ import argparse
 from asyncio import run
 
 import yaml
-from algorithms import EchoAlgorithm, RingElection
-from nepherite.node import BlockchainNode
 from ipv8.configuration import ConfigBuilder, default_bootstrap_defs
 from ipv8.util import create_event_with_signals
 from ipv8_service import IPv8
 
 from nepherite.base import Blockchain
-
-
-def get_algorithm(name: str) -> Blockchain:
-    algorithms = {
-        "echo": EchoAlgorithm,
-        "election": RingElection,
-        "blockchain": BlockchainNode,
-    }
-    if name not in algorithms:
-        raise Exception(f"Cannot find select algorithm with name {name}")
-    return algorithms[name]
+from nepherite.node import NepheriteNode
 
 
 async def start_communities(
@@ -66,9 +54,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     node_id = args.node_id
 
-    alg = get_algorithm(args.algorithm)
     with open(args.topology) as f:
         topology = yaml.safe_load(f)
         connections = topology[node_id]
 
-        run(start_communities(node_id, connections, alg, not args.docker))
+        run(start_communities(node_id, connections, NepheriteNode, not args.docker))
