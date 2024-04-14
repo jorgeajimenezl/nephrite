@@ -6,6 +6,9 @@ __pycache__/
 # Data
 data/
 
+test*mj.py
+
+
 # C extensions
 *.so
 .idea
