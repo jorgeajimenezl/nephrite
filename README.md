@@ -11,7 +11,7 @@ This Python implementation serves as a basic introduction to blockchain technolo
 - Mariano Rodriguez <<mjasonrc@gmail.com>>
 - Victor Lopez <<victor.98.javier@gmail.com>>
 - Samuel Suares<<samueldsr8@gmail.com>>
-- Fernando Valdes<<>>
+- Fernando Valdes<<fvaldes0109@gmail.com>>
 
 ## System
 
