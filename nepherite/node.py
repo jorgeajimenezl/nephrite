@@ -117,7 +117,7 @@ class NepheriteNode(Blockchain):
             blob = f.read()
         return self.serializer.unpack_serializable(blob, Block)
 
-    def make_transaction(self, output: list[Utxo]) -> Transaction:
+    def make_and_sign_transaction(self, output: list[Utxo]) -> Transaction:
         payload = TransactionPayload(
             timestamp=int(time.monotonic_ns() // 1_000),
             input=self.my_peer.mid,
@@ -268,7 +268,7 @@ class NepheriteNode(Blockchain):
         block_hash = request.block_hash
         if block_hash not in self.blocks:
             for u in self.get_peers():
-                self.ez_send(u, request)
+                self.ez_send(u, request)￼
             return
 
         block = self.blocks[block_hash]
