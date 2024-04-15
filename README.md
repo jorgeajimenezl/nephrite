@@ -43,10 +43,10 @@ Nodes within the network are required to establish a minimum of 8 connections an
 ### Week 1
 
 - [x] Consensus puzzle
-- [ ] Verify Transaction Functionality
-- [ ] Verify Block Functionality
-- [ ] Test of 100 peers per team integrant
-- [ ] Functional Transaction
+- [x] Verify Transaction Functionality
+- [x] Verify Block Functionality
+- [x] Test of 100 peers
+- [x] Functional Transaction
 - [ ] Functional Verified Chain of Minimun 3 Blocks
 - [x] Local Database per peer
 - [x] Week 1 report

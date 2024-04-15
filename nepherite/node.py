@@ -7,8 +7,8 @@ from collections import defaultdict
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import dataclass
 from ipv8.types import Peer
-from rocksdict import Options, Rdict
 
+# from rocksdict import Options, Rdict
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
@@ -80,8 +80,9 @@ class NepheriteNode(Blockchain):
         self.last_seq_num = 0
         self.events: dict[int, asyncio.Event] = {}
 
-        options = Options(raw_mode=False)
-        self.chainstate = Rdict("data/chainstate.db", options=options)
+        # options = Options(raw_mode=False)
+        # self.chainstate = Rdict("data/chainstate.db", options=options)
+        self.chainstate = {}
 
         self.add_message_handler(BlockHeader, self.on_block_header)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
