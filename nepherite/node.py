@@ -1,5 +1,6 @@
 import asyncio
 import os
+import random
 import time
 from collections import defaultdict
 
@@ -86,6 +87,20 @@ class NepheriteNode(Blockchain):
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
         self.add_message_handler(Transaction, self.on_transaction)
 
+    def on_start(self):
+        self.register_anonymous_task(
+            "create_dummy_transaction", self.create_dummy_transaction, interval=5
+        )
+
+    def create_dummy_transaction(self):
+        peer = random.choice(self.get_peers())
+        out = [Utxo(peer.mid, 100)]
+
+        for peer in self.get_peers():
+            if peer.mid != self.my_peer.mid:
+                tx = self.make_transaction(out)
+                self.ez_send(peer, tx)
+
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)
         return sha256(blob)
@@ -115,11 +130,11 @@ class NepheriteNode(Blockchain):
     def verify_transaction(self, transaction: Transaction) -> bool:
         # Verify signature
         # TODO: Implement multiple input transactions
-        
+
         pk = self.crypto.key_from_public_bin(transaction.pk)
         if transaction.payload.input != self.pk.key_to_hash():
             return False
-        
+
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
