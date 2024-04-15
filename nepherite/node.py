@@ -21,15 +21,21 @@ RETRY_COUNT = 3
 
 @dataclass
 class Utxo:
-    address: str
+    address: bytes
     amount: int
+
+
+@dataclass
+class TransactionPayload:
+    timestamp: int
+    input: bytes
+    output: list[Utxo]
 
 
 @dataclass(msg_id=1)
 class Transaction:
-    timestamp: int
-    input: list[Utxo]
-    output: list[Utxo]
+    payload: TransactionPayload
+    pk: bytes
     sign: bytes
 
 
@@ -95,7 +101,35 @@ class NepheriteNode(Blockchain):
             blob = f.read()
         return self.serializer.unpack_serializable(blob, Block)
 
+    def make_transaction(self, output: list[Utxo]) -> Transaction:
+        payload = TransactionPayload(
+            timestamp=int(time.monotonic_ns() // 1_000),
+            input=self.my_peer.mid,
+            output=output,
+        )
+        blob = self.serializer.pack_serializable(payload)
+        sign = self.crypto.create_signature(self.my_peer.key, blob)
+        pk = self.my_peer.key.pub().key_to_bin()
+        return Transaction(payload, pk, sign)
+
     def verify_transaction(self, transaction: Transaction) -> bool:
+        # Verify signature
+        # TODO: Implement multiple input transactions
+        
+        pk = self.crypto.key_from_public_bin(transaction.pk)
+        if transaction.payload.input != self.pk.key_to_hash():
+            return False
+        
+        blob = self.serializer.pack_serializable(transaction.payload)
+        if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
+            return False
+
+        for utxo in transaction.payload:
+            key = self.crypto.key_from_public_bin(utxo.payload.address)
+            blob = self.serializer.pack_serializable(utxo.payload)
+            if not self.crypto.is_valid_signature(key, blob, utxo.sign):
+                return False
+
         sum_in = 0
         sum_out = 0
         for utxo in transaction.input:
@@ -115,27 +149,22 @@ class NepheriteNode(Blockchain):
         # Puzzle solved?
         if not Puzzle.verify(blob, header.nonce):
             return False
-
         # No double spending?
         if any(not self.verify_transaction(tx) for tx in block.transactions):
             return False
-
         # Correct difficulty?
         if block.header.difficulty != BLOCK_DIFFICULTY:
             return False
-
         # Correct previous block?
         if prev_block := self.blocks_info.get(header.prev_block_hash):
             if prev_block.seq_num + 1 != header.seq_num:
                 return False
         else:
             return False
-
         # Correct merkle root?
         tree = MerkleTree(block.transactions)
         if tree.root.hash != header.merkle_root_hash:
             return False
-
         return True
 
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
@@ -164,7 +193,27 @@ class NepheriteNode(Blockchain):
             nonce = int.from_bytes(os.urandom(8))
             self.ez_send(peer, PullBlockRequest(block_hash, self.my_peer.mid, nonce))
 
-        # TODO: stuff with next_blocks
+            # partially rollback
+            # find the last block that is in the chain
+            # TODO: Implement rollback
+
+    @message_wrapper(Block)
+    def on_block(self, peer: Peer, block: Block) -> None:
+        if not self.verify_block(block):
+            return
+
+        block_hash = self.get_block_hash(block.header)  # noqa: A001
+        self.blocks[block_hash] = block
+        self.blocks_info[block_hash] = block.header
+        self.save_block(block)
+        self.last_seq_num = block.header.seq_num
+
+        # Update chainstate
+        for tx in block.transactions:
+            for utxo in tx.input:
+                del self.chainstate[utxo.address]
+            for utxo in tx.output:
+                self.chainstate[utxo.address] = utxo.amount
 
     def build_block(self) -> Block:
         previous_block = self.load_block(self.last_seq_num)
@@ -188,8 +237,8 @@ class NepheriteNode(Blockchain):
         blob = self.serializer.pack_serializable(block)
         answer = Puzzle.compute(blob)
 
-        # TODO: Implement mining
-        ...
+        block.header.nonce = answer
+        return block
 
     @message_wrapper(PullBlockAck)
     def on_pull_block_response(self, peer: Peer, response: PullBlockAck) -> None:
