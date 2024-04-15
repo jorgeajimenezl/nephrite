@@ -1,6 +1,7 @@
-import yaml
-import copy
 import argparse
+import copy
+
+import yaml
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -12,13 +13,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "topology_file", type=str, nargs="?", default="topologies/ring.yaml"
     )
-    parser.add_argument("algorithm", type=str, nargs="?", default="echo")
     parser.add_argument(
         "template_file", type=str, nargs="?", default="docker-compose.template.yml"
     )
     args = parser.parse_args()
 
-    with open(args.template_file, "r") as f:
+    with open(args.template_file) as f:
         content = yaml.safe_load(f)
 
         node = content["services"]["node0"]
@@ -35,7 +35,6 @@ if __name__ == "__main__":
             n["networks"]["vpcbr"]["ipv4_address"] = f"192.168.55.{10 + i}"
             n["environment"]["PID"] = i
             n["environment"]["TOPOLOGY"] = args.topology_file
-            n["environment"]["ALGORITHM"] = args.algorithm
             nodes[f"node{i}"] = n
 
             connections[i] = [j for j in range(args.num_nodes) if j != i]
@@ -44,7 +43,7 @@ if __name__ == "__main__":
 
         with open("docker-compose.yml", "w") as f2:
             yaml.safe_dump(content, f2)
-            print(f"Output written to docker-compose.yml")
+            print("Output written to docker-compose.yml")
 
         with open(args.topology_file, "w") as f3:
             yaml.safe_dump(connections, f3)

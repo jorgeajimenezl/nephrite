@@ -49,7 +49,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "topology", type=str, nargs="?", default="topologies/default.yaml"
     )
-    parser.add_argument("algorithm", type=str, nargs="?", default="echo")
     parser.add_argument("--docker", action="store_true")
     args = parser.parse_args()
     node_id = args.node_id

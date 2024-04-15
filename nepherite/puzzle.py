@@ -1,12 +1,11 @@
-import hashlib
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 from nepherite.utils import sha256
 
 DIFFICULTY = 5
 Answer = TypeVar("Answer")
 
-class Puzzle:
+class Puzzle(Generic[Answer]):
     @staticmethod
     def compute(data: bytes) -> Answer:
         pass
