@@ -268,7 +268,7 @@ class NepheriteNode(Blockchain):
         block_hash = request.block_hash
         if block_hash not in self.blocks:
             for u in self.get_peers():
-                self.ez_send(u, request)￼
+                self.ez_send(u, request)
             return
 
         block = self.blocks[block_hash]
