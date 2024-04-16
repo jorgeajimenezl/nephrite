@@ -26,6 +26,10 @@ To run the program, execute the following command:
 python -m nepherite // more arguments to be added this is not working yet
 ```
 
+## TODO
+- [ ] Change the way that the block is serialized to not include the nonce on it.
+- [ ] At the time of block creation check the double spending on skip the failed transaction.
+
 ## Authors
 
 **Evaluation method:** as a team.
