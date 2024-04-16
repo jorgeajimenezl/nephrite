@@ -29,7 +29,7 @@ class Utxo:
 @dataclass
 class TransactionPayload:
     timestamp: int
-    input: bytes
+    input: Utxo
     output: list[Utxo]
 
 
