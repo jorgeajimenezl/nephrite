@@ -84,6 +84,8 @@ class NepheriteNode(Blockchain):
         # self.chainstate = Rdict("data/chainstate.db", options=options)
         self.chainstate = {}
 
+        self.public_keys = dict[Peer, ]
+
         self.add_message_handler(BlockHeader, self.on_block_header)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
         self.add_message_handler(Transaction, self.on_transaction)
@@ -129,6 +131,11 @@ class NepheriteNode(Blockchain):
         pk = self.my_peer.key.pub().key_to_bin()
         return Transaction(payload, pk, sign)
 
+    def get_public_key_by_mid(self, mid):
+        for _, p in self.nodes.items():
+            if p.mid == mid:
+                return p.public_key
+
     def verify_transaction(self, transaction: Transaction) -> bool:
         # Verify signature
         # TODO: Implement multiple input transactions
@@ -141,9 +148,9 @@ class NepheriteNode(Blockchain):
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
 
-        key = self.crypto.key_from_public_bin(transaction.payload.input)
+        public_key = self.crypto.key_from_public_bin(transaction.pk)
         blob = self.serializer.pack_serializable(transaction.payload)
-        if not self.crypto.is_valid_signature(key, blob, transaction.sign):
+        if not self.crypto.is_valid_signature(public_key, blob, transaction.sign):
             return False
         
         # todo: ths is veryy wroooong, mutliple inputs but it is not
@@ -193,9 +200,10 @@ class NepheriteNode(Blockchain):
         
         print(type(transaction))
         if not self.verify_transaction(transaction):
+            logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id}")
             return
         
-        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer[0].hex()[:6]}")
+        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer_id}")
 
         self.mempool.append(transaction)
         # broadcast transaction
