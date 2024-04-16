@@ -21,7 +21,7 @@ def message_wrapper(
 
 
 class Blockchain(Community):
-    community_id = b"matadores_ledgers"
+    community_id = b"matadores_ledgersuwu"
 
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
@@ -38,6 +38,8 @@ class Blockchain(Community):
         event: Event,
         use_localhost: bool = True,
     ) -> None:
+        print(f"Node {self.my_peer.mid.hex()} started")
+
         self.event = event
         self.node_id = node_id
         self.connections = connections
@@ -63,6 +65,9 @@ class Blockchain(Community):
                 self.nodes[node_id] = conn_nodes[0]
             if not valid:
                 return
+            print(
+                f"Node {self.my_peer.mid.hex()} is fully connected to all nodes in the topology"
+            )
             self.cancel_pending_task("ensure_nodes_connected")
             print(f"[Node {self.node_id}] Starting")
             self.register_anonymous_task(
