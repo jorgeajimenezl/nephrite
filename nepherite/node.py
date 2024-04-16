@@ -29,7 +29,6 @@ class Utxo:
 @dataclass
 class TransactionPayload:
     timestamp: int
-    input: bytes
     output: list[Utxo]
 
 
@@ -123,7 +122,6 @@ class NepheriteNode(Blockchain):
     def make_and_sign_transaction(self, output: list[Utxo]) -> Transaction:
         payload = TransactionPayload(
             timestamp=int(time.monotonic_ns() // 1_000),
-            input=self.my_peer.mid,
             output=output,
         )
         blob = self.serializer.pack_serializable(payload)
@@ -136,22 +134,20 @@ class NepheriteNode(Blockchain):
             if p.mid == mid:
                 return p.public_key
 
-    def verify_transaction(self, transaction: Transaction) -> bool:
-        # Verify signature
-        # TODO: Implement multiple input transactions
+    def verify_transaction(
+        self, transaction: Transaction, coinbase: bool = False
+    ) -> bool:
         pk = self.crypto.key_from_public_bin(transaction.pk)
-        if transaction.payload.input != pk.key_to_hash():
-            return False
-
+        addr = pk.key_to_hash()
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
-
         sum = 0  # noqa: A001
         for utxo in transaction.payload.output:
             sum += utxo.amount  # noqa: A001
-
-        amount = self.chainstate.get(transaction.payload.input, 0)
+        if coinbase:
+            return sum == BLOCK_REWARD
+        amount = self.chainstate.get(addr, 0)
         return amount >= sum
 
     def verify_block(self, block: Block) -> bool:
@@ -193,14 +189,12 @@ class NepheriteNode(Blockchain):
                 f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id} coz is in mempool"
             )
             return
-
         if not self.verify_transaction(transaction):
             logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id}")
             return
-
         logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer_id}")
-
         self.mempool.append(transaction)
+
         # broadcast transaction
         for u in self.get_peers():
             if u.mid != peer.mid:
