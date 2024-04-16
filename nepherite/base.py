@@ -10,6 +10,8 @@ from ipv8.lazy_community import lazy_wrapper
 from ipv8.messaging.serialization import Payload
 from ipv8.types import LazyWrappedHandler, MessageHandlerFunction, Peer
 
+from nepherite.utils import logging
+
 DataclassPayload = typing.TypeVar("DataclassPayload")
 AnyPayload = Payload | DataclassPayload
 
@@ -38,7 +40,7 @@ class Blockchain(Community):
         event: Event,
         use_localhost: bool = True,
     ) -> None:
-        print(f"Node {self.my_peer.mid.hex()} started")
+        logging.debug(f"Node {self.my_peer.mid.hex()} started")
 
         self.event = event
         self.node_id = node_id
@@ -63,10 +65,11 @@ class Blockchain(Community):
                     return
                 valid = True
                 self.nodes[node_id] = conn_nodes[0]
+                logging.debug(f"# node {self.my_peer.mid.hex()[:6]} store {conn_nodes[0]} with {node_id}")
             if not valid:
                 return
             print(
-                f"Node {self.my_peer.mid.hex()} is fully connected to all nodes in the topology"
+                f"Node {self.my_peer.mid.hex()[:6]} is fully connected to all nodes in the topology"
             )
             self.cancel_pending_task("ensure_nodes_connected")
             print(f"[Node {self.node_id}] Starting")

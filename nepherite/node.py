@@ -101,6 +101,7 @@ class NepheriteNode(Blockchain):
             if peer.mid != self.my_peer.mid:
                 tx = self.make_and_sign_transaction(out)
                 self.ez_send(peer, tx)
+                logging.debug(f"Node {self.my_peer.mid.hex()[:6]} sent tx to {peer.mid.hex()[:6]}")
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)
@@ -183,9 +184,16 @@ class NepheriteNode(Blockchain):
             return False
         return True
 
+    @message_wrapper(Transaction)
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
+        peer_id = self.node_id_from_peer(peer)
+        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} recive tx from {peer_id}")
+        
+        print(type(transaction))
         if not self.verify_transaction(transaction):
             return
+        
+        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer[0].hex()[:6]}")
 
         self.mempool.append(transaction)
         # broadcast transaction
