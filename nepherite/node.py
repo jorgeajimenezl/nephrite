@@ -29,7 +29,7 @@ class Utxo:
 @dataclass
 class TransactionPayload:
     timestamp: int
-    input: Utxo
+    input: bytes
     output: list[Utxo]
 
 
@@ -83,7 +83,6 @@ class NepheriteNode(Blockchain):
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
         self.chainstate = {}
-        # self.public_keys = dict[Peer, ]
 
         self.add_message_handler(BlockHeader, self.on_block_header)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
@@ -124,7 +123,7 @@ class NepheriteNode(Blockchain):
     def make_and_sign_transaction(self, output: list[Utxo]) -> Transaction:
         payload = TransactionPayload(
             timestamp=int(time.monotonic_ns() // 1_000),
-            input=Utxo(self.my_peer.mid, 1000),
+            input=self.my_peer.mid,
             output=output,
         )
         blob = self.serializer.pack_serializable(payload)
@@ -141,7 +140,7 @@ class NepheriteNode(Blockchain):
         # Verify signature
         # TODO: Implement multiple input transactions
         pk = self.crypto.key_from_public_bin(transaction.pk)
-        if transaction.payload.input.address != pk.key_to_hash():
+        if transaction.payload.input != pk.key_to_hash():
             return False
 
         blob = self.serializer.pack_serializable(transaction.payload)
@@ -151,7 +150,9 @@ class NepheriteNode(Blockchain):
         sum = 0  # noqa: A001
         for utxo in transaction.payload.output:
             sum += utxo.amount  # noqa: A001
-        return transaction.payload.input.amount >= sum
+        
+        amount = self.chainstate.get(transaction.payload.input, 0)
+        return amount >= sum
 
     def verify_block(self, block: Block) -> bool:
         header = block.header
