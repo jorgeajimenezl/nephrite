@@ -148,7 +148,7 @@ class NepheriteNode(Blockchain):
             return False
         
         sum = 0  # noqa: A001
-        for utxo in transaction.output:
+        for utxo in transaction.payload.output:
             sum += utxo.amount  # noqa: A001
         return transaction.payload.input.amount >= sum
 
