@@ -134,30 +134,32 @@ class NepheriteNode(Blockchain):
         # TODO: Implement multiple input transactions
 
         pk = self.crypto.key_from_public_bin(transaction.pk)
-        if transaction.payload.input != self.pk.key_to_hash():
+        if transaction.payload.input != pk.key_to_hash():
             return False
 
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
 
-        for utxo in transaction.payload:
-            key = self.crypto.key_from_public_bin(utxo.payload.address)
-            blob = self.serializer.pack_serializable(utxo.payload)
-            if not self.crypto.is_valid_signature(key, blob, utxo.sign):
-                return False
+        key = self.crypto.key_from_public_bin(transaction.payload.input)
+        blob = self.serializer.pack_serializable(transaction.payload)
+        if not self.crypto.is_valid_signature(key, blob, transaction.sign):
+            return False
+        
+        # todo: ths is veryy wroooong, mutliple inputs but it is not
 
-        sum_in = 0
-        sum_out = 0
-        for utxo in transaction.input:
-            sum_in += utxo.amount
-            if utxo.address not in self.chainstate:
-                return False
-        for utxo in transaction.output:
-            sum_out += utxo.amount
+        # sum_in = 0
+        # sum_out = 0
+        # for utxo in transaction.input:
+        #     sum_in += utxo.amount
+        #     if utxo.address not in self.chainstate:
+        #         return False
+        # for utxo in transaction.output:
+        #     sum_out += utxo.amount
 
-        # TODO: fee stuff (ask teacher)
-        return sum_in >= sum_out
+        # return sum_in >= sum_out
+
+        return True
 
     def verify_block(self, block: Block) -> bool:
         header = block.header
