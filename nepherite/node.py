@@ -123,7 +123,7 @@ class NepheriteNode(Blockchain):
     def make_and_sign_transaction(self, output: list[Utxo]) -> Transaction:
         payload = TransactionPayload(
             timestamp=int(time.monotonic_ns() // 1_000),
-            input=self.my_peer.mid,
+            input=Utxo(self.my_peer.mid, 1000),
             output=output,
         )
         blob = self.serializer.pack_serializable(payload)
@@ -139,34 +139,18 @@ class NepheriteNode(Blockchain):
     def verify_transaction(self, transaction: Transaction) -> bool:
         # Verify signature
         # TODO: Implement multiple input transactions
-
         pk = self.crypto.key_from_public_bin(transaction.pk)
-        if transaction.payload.input != pk.key_to_hash():
+        if transaction.payload.input.address != pk.key_to_hash():
             return False
 
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
-
-        public_key = self.crypto.key_from_public_bin(transaction.pk)
-        blob = self.serializer.pack_serializable(transaction.payload)
-        if not self.crypto.is_valid_signature(public_key, blob, transaction.sign):
-            return False
         
-        # todo: ths is veryy wroooong, mutliple inputs but it is not
-
-        # sum_in = 0
-        # sum_out = 0
-        # for utxo in transaction.input:
-        #     sum_in += utxo.amount
-        #     if utxo.address not in self.chainstate:
-        #         return False
-        # for utxo in transaction.output:
-        #     sum_out += utxo.amount
-
-        # return sum_in >= sum_out
-
-        return True
+        sum = 0  # noqa: A001
+        for utxo in transaction.output:
+            sum += utxo.amount  # noqa: A001
+        return transaction.payload.input.amount >= sum
 
     def verify_block(self, block: Block) -> bool:
         header = block.header
