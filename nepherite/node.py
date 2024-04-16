@@ -3,6 +3,7 @@ import os
 import random
 import time
 from collections import defaultdict
+from typing import Literal
 
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import dataclass
@@ -14,7 +15,7 @@ from nepherite.merkle import MerkleTree
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import logging, sha256
 
-BLOCK_SIZE = 16
+BLOCK_SIZE = 4
 BLOCK_REWARD = 100
 BLOCK_DIFFICULTY = 6
 RETRY_COUNT = 3
@@ -82,6 +83,7 @@ class NepheriteNode(Blockchain):
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
         self.chainstate = {}
+        self.is_mining = False
 
         self.add_message_handler(BlockHeader, self.on_block_header)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
@@ -91,6 +93,36 @@ class NepheriteNode(Blockchain):
         self.register_anonymous_task(
             "create_dummy_transaction", self.create_dummy_transaction, interval=5
         )
+        self.register_anonymous_task(
+            "start_to_create_block", self.start_to_create_block, interval=3
+        )
+
+    def __log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
+        match level:
+            case "info":
+                logging.info(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+            case "warn":
+                logging.warn(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+            case "error":
+                logging.error(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+            case "debug":
+                logging.debug(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+
+    def start_to_create_block(self):
+        self.__log("info", "Start to create block")
+
+        if self.is_mining:
+            self.__log("warn", "Already mining")
+            return
+
+        if len(self.mempool) >= BLOCK_SIZE:
+            self.__log("info", "Start mining")
+            block = self.mine_block()
+            self.__log("info", "Block mined")
+
+            for peer in self.get_peers():
+                self.ez_send(peer, block)
+                self.__log("info", f"Block sent to {peer.mid.hex()[:6]}")
 
     def create_dummy_transaction(self):
         peer = random.choice(self.get_peers())
