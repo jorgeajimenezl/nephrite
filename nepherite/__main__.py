@@ -6,14 +6,12 @@ from ipv8.configuration import ConfigBuilder, default_bootstrap_defs
 from ipv8.util import create_event_with_signals
 from ipv8_service import IPv8
 
-from nepherite.base import Blockchain
 from nepherite.node import NepheriteNode
 
 
 async def start_communities(
     node_id: int,
     connections: list[int],
-    algorithm: Blockchain,
     use_localhost: bool = True,
 ) -> None:
     event = create_event_with_signals()
@@ -21,18 +19,18 @@ async def start_communities(
     connections_updated = [(x, base_port + x) for x in connections]
     node_port = base_port + node_id
     builder = ConfigBuilder().clear_keys().clear_overlays()
-    builder.add_key("my peer", "medium", f"ec{node_id}.pem")
+    builder.add_key("nepherite-peer", "medium", f"data/keys/ec{node_id}.pem")
     builder.set_port(node_port)
     builder.add_overlay(
         "blockchain_community",
-        "my peer",
+        "nepherite-peer",
         [],
         default_bootstrap_defs,
         {},
         [("started", node_id, connections_updated, event, use_localhost)],
     )
     ipv8_instance = IPv8(
-        builder.finalize(), extra_communities={"blockchain_community": algorithm}
+        builder.finalize(), extra_communities={"blockchain_community": NepheriteNode}
     )
     await ipv8_instance.start()
     await event.wait()
@@ -57,4 +55,4 @@ if __name__ == "__main__":
         topology = yaml.safe_load(f)
         connections = topology[node_id]
 
-        run(start_communities(node_id, connections, NepheriteNode, not args.docker))
+        run(start_communities(node_id, connections, not args.docker))

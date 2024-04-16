@@ -11,6 +11,9 @@ data/
 
 test*mj.py
 
+# Keys
+*.pem
+
 
 # C extensions
 *.so

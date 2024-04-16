@@ -99,7 +99,7 @@ class NepheriteNode(Blockchain):
 
         for peer in self.get_peers():
             if peer.mid != self.my_peer.mid:
-                tx = self.make_transaction(out)
+                tx = self.make_and_sign_transaction(out)
                 self.ez_send(peer, tx)
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
