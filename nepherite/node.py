@@ -12,7 +12,7 @@ from ipv8.types import Peer
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
-from nepherite.utils import sha256, logging
+from nepherite.utils import logging, sha256
 
 BLOCK_SIZE = 16
 BLOCK_REWARD = 100
@@ -102,7 +102,9 @@ class NepheriteNode(Blockchain):
             if peer.mid != self.my_peer.mid:
                 tx = self.make_and_sign_transaction(out)
                 self.ez_send(peer, tx)
-                logging.debug(f"Node {self.my_peer.mid.hex()[:6]} sent tx to {peer.mid.hex()[:6]}")
+                logging.debug(
+                    f"Node {self.my_peer.mid.hex()[:6]} sent tx to {peer.mid.hex()[:6]}"
+                )
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)
@@ -145,7 +147,7 @@ class NepheriteNode(Blockchain):
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
-        
+
         sum = 0  # noqa: A001
         for utxo in transaction.payload.output:
             sum += utxo.amount  # noqa: A001
@@ -175,7 +177,7 @@ class NepheriteNode(Blockchain):
         if tree.root.hash != header.merkle_root_hash:
             return False
         return True
-    
+
     def check_if_tx_in_mempool(self, tx: Transaction):
         return any(t.sign == tx.sign for t in self.mempool)
 
@@ -186,14 +188,16 @@ class NepheriteNode(Blockchain):
         logging.debug(f"Node {self.my_peer.mid.hex()[:6]} recive tx from {peer_id}")
 
         if self.check_if_tx_in_mempool(transaction):
-            logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id} coz is in mempool")
+            logging.info(
+                f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id} coz is in mempool"
+            )
             return
-        
+
         print(type(transaction))
         if not self.verify_transaction(transaction):
             logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id}")
             return
-        
+
         logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer_id}")
 
         self.mempool.append(transaction)

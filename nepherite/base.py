@@ -65,7 +65,9 @@ class Blockchain(Community):
                     return
                 valid = True
                 self.nodes[node_id] = conn_nodes[0]
-                logging.debug(f"# node {self.my_peer.mid.hex()[:6]} store {conn_nodes[0]} with {node_id}")
+                logging.debug(
+                    f"# node {self.my_peer.mid.hex()[:6]} store {conn_nodes[0]} with {node_id}"
+                )
             if not valid:
                 return
             print(

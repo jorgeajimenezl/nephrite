@@ -1,7 +1,10 @@
+import logging
+
 from cryptography.hazmat.primitives import hashes
 
-import logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 
 def sha256(*items: list[bytes]) -> bytes:
