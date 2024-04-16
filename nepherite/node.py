@@ -12,7 +12,7 @@ from ipv8.types import Peer
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
-from nepherite.utils import sha256
+from nepherite.utils import logging, sha256
 
 BLOCK_SIZE = 16
 BLOCK_REWARD = 100
@@ -101,6 +101,9 @@ class NepheriteNode(Blockchain):
             if peer.mid != self.my_peer.mid:
                 tx = self.make_and_sign_transaction(out)
                 self.ez_send(peer, tx)
+                logging.debug(
+                    f"Node {self.my_peer.mid.hex()[:6]} sent tx to {peer.mid.hex()[:6]}"
+                )
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)
@@ -128,35 +131,28 @@ class NepheriteNode(Blockchain):
         pk = self.my_peer.key.pub().key_to_bin()
         return Transaction(payload, pk, sign)
 
+    def get_public_key_by_mid(self, mid):
+        for _, p in self.nodes.items():
+            if p.mid == mid:
+                return p.public_key
+
     def verify_transaction(self, transaction: Transaction) -> bool:
         # Verify signature
         # TODO: Implement multiple input transactions
-
         pk = self.crypto.key_from_public_bin(transaction.pk)
-        if transaction.payload.input != self.pk.key_to_hash():
+        if transaction.payload.input != pk.key_to_hash():
             return False
 
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
 
-        for utxo in transaction.payload:
-            key = self.crypto.key_from_public_bin(utxo.payload.address)
-            blob = self.serializer.pack_serializable(utxo.payload)
-            if not self.crypto.is_valid_signature(key, blob, utxo.sign):
-                return False
+        sum = 0  # noqa: A001
+        for utxo in transaction.payload.output:
+            sum += utxo.amount  # noqa: A001
 
-        sum_in = 0
-        sum_out = 0
-        for utxo in transaction.input:
-            sum_in += utxo.amount
-            if utxo.address not in self.chainstate:
-                return False
-        for utxo in transaction.output:
-            sum_out += utxo.amount
-
-        # TODO: fee stuff (ask teacher)
-        return sum_in >= sum_out
+        amount = self.chainstate.get(transaction.payload.input, 0)
+        return amount >= sum
 
     def verify_block(self, block: Block) -> bool:
         header = block.header
@@ -183,14 +179,32 @@ class NepheriteNode(Blockchain):
             return False
         return True
 
+    def check_if_tx_in_mempool(self, tx: Transaction):
+        return any(t.sign == tx.sign for t in self.mempool)
+
+    @message_wrapper(Transaction)
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
-        if not self.verify_transaction(transaction):
+        # TODO: remove this debug
+        peer_id = self.node_id_from_peer(peer)
+        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} recive tx from {peer_id}")
+
+        if self.check_if_tx_in_mempool(transaction):
+            logging.info(
+                f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id} coz is in mempool"
+            )
             return
+
+        if not self.verify_transaction(transaction):
+            logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id}")
+            return
+
+        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer_id}")
 
         self.mempool.append(transaction)
         # broadcast transaction
         for u in self.get_peers():
-            self.ez_send(u, transaction)
+            if u.mid != peer.mid:
+                self.ez_send(u, transaction)
 
     @message_wrapper(BlockHeader)
     def on_block_header(self, peer: Peer, block_header: BlockHeader) -> None:

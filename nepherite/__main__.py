@@ -1,4 +1,5 @@
 import argparse
+import os
 from asyncio import run
 
 import yaml
@@ -38,6 +39,13 @@ async def start_communities(
 
 
 if __name__ == "__main__":
+    if not os.path.isdir("data"):
+        os.mkdir("data")
+    if not os.path.isdir("data/keys"):
+        os.mkdir("data/keys")
+    if not os.path.isdir("data/blocks"):
+        os.mkdir("data/blocks")
+
     parser = argparse.ArgumentParser(
         prog="Blockchain",
         description="Code to execute blockchain.",
