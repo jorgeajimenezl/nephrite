@@ -74,7 +74,7 @@ class NepheriteNode(Blockchain):
 
         self.next_blocks: dict[bytes, list[bytes]] = defaultdict(list)
         self.blocks: dict[bytes, Block] = set()
-        self.mempool: list[Transaction] = []
+        self.mempool: dict[bytes, Transaction] = {}
         self.blocks_info: dict[bytes, BlockHeader] = {}
         self.last_seq_num = 0
         self.events: dict[int, asyncio.Event] = {}
@@ -206,7 +206,7 @@ class NepheriteNode(Blockchain):
         return True
 
     def check_if_tx_in_mempool(self, tx: Transaction):
-        return any(t.sign == tx.sign for t in self.mempool)
+        return self.mempool.get(tx.sign) is not None
 
     @message_wrapper(Transaction)
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
