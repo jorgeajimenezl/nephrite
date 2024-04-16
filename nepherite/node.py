@@ -83,8 +83,7 @@ class NepheriteNode(Blockchain):
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
         self.chainstate = {}
-
-        self.public_keys = dict[Peer, ]
+        # self.public_keys = dict[Peer, ]
 
         self.add_message_handler(BlockHeader, self.on_block_header)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
