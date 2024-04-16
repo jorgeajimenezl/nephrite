@@ -12,7 +12,7 @@ from ipv8.types import Peer
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
-from nepherite.utils import sha256
+from nepherite.utils import sha256, logging
 
 BLOCK_SIZE = 16
 BLOCK_REWARD = 100

@@ -44,6 +44,8 @@ if __name__ == "__main__":
         os.mkdir("data")
     if not os.path.isdir("data/keys"):
         os.mkdir("data/keys")
+    if not os.path.isdir("data/blocks"):
+        os.mkdir("data/blocks")
 
     parser = argparse.ArgumentParser(
         prog="Blockchain",
