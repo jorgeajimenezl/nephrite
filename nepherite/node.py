@@ -150,7 +150,7 @@ class NepheriteNode(Blockchain):
         sum = 0  # noqa: A001
         for utxo in transaction.payload.output:
             sum += utxo.amount  # noqa: A001
-        
+
         amount = self.chainstate.get(transaction.payload.input, 0)
         return amount >= sum
 
@@ -194,7 +194,6 @@ class NepheriteNode(Blockchain):
             )
             return
 
-        print(type(transaction))
         if not self.verify_transaction(transaction):
             logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id}")
             return
