@@ -75,7 +75,7 @@ class NepheriteNode(Blockchain):
 
         self.next_blocks: dict[bytes, list[bytes]] = defaultdict(list)
         self.blocks: dict[bytes, Block] = set()
-        self.mempool: list[Transaction] = []
+        self.mempool: dict[bytes, Transaction] = {}
         self.blocks_info: dict[bytes, BlockHeader] = {}
         self.last_seq_num = 0
         self.events: dict[int, asyncio.Event] = {}
@@ -180,7 +180,7 @@ class NepheriteNode(Blockchain):
         return True
 
     def check_if_tx_in_mempool(self, tx: Transaction):
-        return any(t.sign == tx.sign for t in self.mempool)
+        return self.mempool.get(tx.sign) is not None
 
     @message_wrapper(Transaction)
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
@@ -200,7 +200,7 @@ class NepheriteNode(Blockchain):
 
         logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer_id}")
 
-        self.mempool.append(transaction)
+        self.mempool[transaction.sign] = transaction
         # broadcast transaction
         for u in self.get_peers():
             if u.mid != peer.mid:
@@ -247,7 +247,7 @@ class NepheriteNode(Blockchain):
 
     def build_block(self) -> Block:
         previous_block = self.load_block(self.last_seq_num)
-        transactions = self.mempool[:BLOCK_SIZE]
+        transactions = list(self.mempool.values())[:BLOCK_SIZE]
         tree = MerkleTree(transactions)
 
         header = BlockHeader(
