@@ -2,7 +2,10 @@
 
 This Python implementation serves as a basic introduction to blockchain technology. Developed as part of a Harbour.Space assignment for the Blockchain module, it is designed primarily as an educational tool rather than for production use.
 The Blockchain implemented is meant to be a simple implementation of a blockchain, using PoW and Transaction based using similar approach as Bitcoin.
-The whitepaper is here: [Whitepaper](docs/whitepaper.md)
+
+The Report for the weeks can be found in the following links:
+
+* [week 1](docs/week_1_report.md)
 
 ## Application
 To Be Discussed
