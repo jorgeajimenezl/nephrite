@@ -176,11 +176,19 @@ class NepheriteNode(Blockchain):
         if tree.root.hash != header.merkle_root_hash:
             return False
         return True
+    
+    def check_if_tx_in_mempool(self, tx: Transaction):
+        return any(t.sign == tx.sign for t in self.mempool)
 
     @message_wrapper(Transaction)
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
+        # TODO: remove this debug
         peer_id = self.node_id_from_peer(peer)
         logging.debug(f"Node {self.my_peer.mid.hex()[:6]} recive tx from {peer_id}")
+
+        if self.check_if_tx_in_mempool(transaction):
+            logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id} coz is in mempool")
+            return
         
         print(type(transaction))
         if not self.verify_transaction(transaction):
@@ -192,7 +200,8 @@ class NepheriteNode(Blockchain):
         self.mempool.append(transaction)
         # broadcast transaction
         for u in self.get_peers():
-            self.ez_send(u, transaction)
+            if u.mid != peer.mid:
+                self.ez_send(u, transaction)
 
     @message_wrapper(BlockHeader)
     def on_block_header(self, peer: Peer, block_header: BlockHeader) -> None:
