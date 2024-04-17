@@ -5,7 +5,7 @@ The Blockchain implemented is meant to be a simple implementation of a blockchai
 
 The Report for the weeks can be found in the following links:
 
-* [week 1](docs/week_1_report.md)
+* [Week 1](docs/week_1_report.md)
 
 ## Application
 To Be Discussed
@@ -26,6 +26,11 @@ To run the program, execute the following command:
 python -m nepherite // more arguments to be added this is not working yet
 ```
 
+## TODO
+- [ ] Change the way that the block is serialized to not include the nonce on it.
+- [ ] At the time of block creation check the double spending on skip the failed transaction.
+- [ ] Add penalization system for the nodes that are not following the rules.
+
 ## Authors
 
 **Evaluation method:** as a team.
@@ -34,5 +39,5 @@ python -m nepherite // more arguments to be added this is not working yet
 - Jorge Jiménez <<jorgeajimenezl17@gmail.com>>
 - Mariano Rodriguez <<mjasonrc@gmail.com>>
 - Victor Lopez <<victor.98.javier@gmail.com>>
-- Samuel Suares<<samueldsr8@gmail.com>>
-- Fernando Valdes<<fvaldes0109@gmail.com>>
+- Samuel Suares <<samueldsr8@gmail.com>>
+- Fernando Valdes <<fvaldes0109@gmail.com>>

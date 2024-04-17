@@ -3,6 +3,7 @@ import os
 import random
 import time
 from collections import defaultdict
+from typing import Literal
 
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import dataclass
@@ -14,7 +15,7 @@ from nepherite.merkle import MerkleTree
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import logging, sha256
 
-BLOCK_SIZE = 16
+BLOCK_SIZE = 4
 BLOCK_REWARD = 100
 BLOCK_DIFFICULTY = 6
 RETRY_COUNT = 3
@@ -29,7 +30,6 @@ class Utxo:
 @dataclass
 class TransactionPayload:
     timestamp: int
-    input: bytes
     output: list[Utxo]
 
 
@@ -43,7 +43,6 @@ class Transaction:
 @dataclass(msg_id=2)
 class BlockHeader:
     seq_num: int
-    version: int
     prev_block_hash: bytes
     merkle_root_hash: bytes
     timestamp: int
@@ -82,16 +81,48 @@ class NepheriteNode(Blockchain):
 
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
-        self.chainstate = {}
+        self.chainstate: dict[bytes, int] = defaultdict(0)
+        self.is_mining = False
 
         self.add_message_handler(BlockHeader, self.on_block_header)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
         self.add_message_handler(Transaction, self.on_transaction)
+        self.add_message_handler(Block, self.on_block)
 
     def on_start(self):
         self.register_anonymous_task(
             "create_dummy_transaction", self.create_dummy_transaction, interval=5
         )
+        self.register_anonymous_task(
+            "start_to_create_block", self.start_to_create_block, interval=3
+        )
+
+    def __log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
+        match level:
+            case "info":
+                logging.info(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+            case "warn":
+                logging.warn(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+            case "error":
+                logging.error(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+            case "debug":
+                logging.debug(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
+
+    def start_to_create_block(self):
+        self.__log("info", "Start to create block")
+
+        if self.is_mining:
+            self.__log("warn", "Already mining")
+            return
+
+        if len(self.mempool) >= BLOCK_SIZE:
+            self.__log("info", "Start mining")
+            block = self.mine_block()
+            self.__log("info", "Block mined")
+
+            for peer in self.get_peers():
+                self.ez_send(peer, block)
+                self.__log("info", f"Block sent to {peer.mid.hex()[:6]}")
 
     def create_dummy_transaction(self):
         peer = random.choice(self.get_peers())
@@ -101,9 +132,7 @@ class NepheriteNode(Blockchain):
             if peer.mid != self.my_peer.mid:
                 tx = self.make_and_sign_transaction(out)
                 self.ez_send(peer, tx)
-                logging.debug(
-                    f"Node {self.my_peer.mid.hex()[:6]} sent tx to {peer.mid.hex()[:6]}"
-                )
+                self.__log("debug", f"Sent tx to {peer.mid.hex()[:6]}")
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)
@@ -123,7 +152,6 @@ class NepheriteNode(Blockchain):
     def make_and_sign_transaction(self, output: list[Utxo]) -> Transaction:
         payload = TransactionPayload(
             timestamp=int(time.monotonic_ns() // 1_000),
-            input=self.my_peer.mid,
             output=output,
         )
         blob = self.serializer.pack_serializable(payload)
@@ -136,22 +164,20 @@ class NepheriteNode(Blockchain):
             if p.mid == mid:
                 return p.public_key
 
-    def verify_transaction(self, transaction: Transaction) -> bool:
-        # Verify signature
-        # TODO: Implement multiple input transactions
+    def verify_transaction(
+        self, transaction: Transaction, coinbase: bool = False
+    ) -> bool:
         pk = self.crypto.key_from_public_bin(transaction.pk)
-        if transaction.payload.input != pk.key_to_hash():
-            return False
-
+        addr = pk.key_to_hash()
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
-
         sum = 0  # noqa: A001
         for utxo in transaction.payload.output:
             sum += utxo.amount  # noqa: A001
-
-        amount = self.chainstate.get(transaction.payload.input, 0)
+        if coinbase:
+            return sum == BLOCK_REWARD
+        amount = self.chainstate[addr]
         return amount >= sum
 
     def verify_block(self, block: Block) -> bool:
@@ -186,22 +212,17 @@ class NepheriteNode(Blockchain):
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
         # TODO: remove this debug
         peer_id = self.node_id_from_peer(peer)
-        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} recive tx from {peer_id}")
+        self.__log("info", f"Transaction from {peer_id} received")
 
         if self.check_if_tx_in_mempool(transaction):
-            logging.info(
-                f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id} coz is in mempool"
-            )
+            self.__log("info", f"Transaction from {peer_id} is already in mempool")
             return
-
         if not self.verify_transaction(transaction):
-            logging.info(f"Node {self.my_peer.mid.hex()[:6]} reject tx from {peer_id}")
+            self.__log("warn", f"Transaction from {peer_id} is invalid")
             return
 
-        logging.debug(f"Node {self.my_peer.mid.hex()[:6]} verify tx from {peer_id}")
-
-        self.mempool[transaction.sign] = transaction
-        # broadcast transaction
+        self.__log("info", f"Transaction from {peer_id} is valid")
+        self.mempool.append(transaction)
         for u in self.get_peers():
             if u.mid != peer.mid:
                 self.ez_send(u, transaction)
@@ -227,46 +248,72 @@ class NepheriteNode(Blockchain):
             # find the last block that is in the chain
             # TODO: Implement rollback
 
+    def get_transaction_trace(self, transaction: Transaction) -> dict[bytes, int]:
+        ret = {}
+        out = 0
+        for utxo in transaction.payload.output:
+            addr = utxo.address
+            amount = utxo.amount
+            ret[addr] += amount
+            out += amount
+        pk = self.crypto.key_from_public_bin(transaction.pk)
+        addr = pk.key_to_hash()
+        ret[addr] -= out
+        return ret
+
     @message_wrapper(Block)
     def on_block(self, peer: Peer, block: Block) -> None:
-        if not self.verify_block(block):
-            return
+        self.__log("info", f"Block {block.header.seq_num} received")
+        # if not self.verify_block(block):
+        #     return
 
-        block_hash = self.get_block_hash(block.header)  # noqa: A001
-        self.blocks[block_hash] = block
-        self.blocks_info[block_hash] = block.header
-        self.save_block(block)
-        self.last_seq_num = block.header.seq_num
+        # self.__log("info", f"Block {block.header.seq_num} verified")
+        # # block_hash = self.get_block_hash(block.header)  # noqa: A001
+        # # self.blocks[block_hash] = block
+        # # self.blocks_info[block_hash] = block.header
+        # # self.save_block(block)
+        # # self.last_seq_num = block.header.seq_num
 
-        # Update chainstate
-        for tx in block.transactions:
-            for utxo in tx.input:
-                del self.chainstate[utxo.address]
-            for utxo in tx.output:
-                self.chainstate[utxo.address] = utxo.amount
+        # TODO: Update chainstate
+
+    def build_coinbase_transaction(self) -> Transaction:
+        output = [Utxo(self.my_peer.mid, BLOCK_REWARD)]
+        return self.make_and_sign_transaction(output)
 
     def build_block(self) -> Block:
-        previous_block = self.load_block(self.last_seq_num)
-        transactions = list(self.mempool.values())[:BLOCK_SIZE]
-        tree = MerkleTree(transactions)
+        if self.last_seq_num != 0:
+            previous_block = self.load_block(self.last_seq_num)
+            prev_block_hash = previous_block.header.prev_block_hash
+        else:
+            # Genesis block
+            prev_block_hash = b"\x00" * 32
 
+        transactions = [self.build_coinbase_transaction()]
+
+        # Include transactions from mempool
+        for tx in self.mempool:
+            if len(transactions) >= BLOCK_SIZE:
+                break
+            ret = self.get_transaction_trace(tx)
+            if all(self.chainstate[k] + v >= 0 for k, v in ret.items()):
+                transactions.append(tx)
+            self.mempool.pop(tx.sign)
+
+        tree = MerkleTree(transactions)
         header = BlockHeader(
             seq_num=self.last_seq_num + 1,
-            version=1,
-            prev_block_hash=previous_block.header.prev_block_hash,
+            prev_block_hash=prev_block_hash,
             merkle_root_hash=tree.root.hash,
             timestamp=time.monotonic_ns() // 1_000,
             difficulty=BLOCK_DIFFICULTY,
             nonce=0,
         )
-
         return Block(header, transactions)
 
     def mine_block(self) -> Block:
         block = self.build_block()
-        blob = self.serializer.pack_serializable(block)
+        blob = self.serializer.pack_serializable(block.header)
         answer = Puzzle.compute(blob)
-
         block.header.nonce = answer
         return block
 
