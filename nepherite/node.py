@@ -220,7 +220,7 @@ class NepheriteNode(Blockchain):
         if not self.verify_transaction(transaction):
             self.__log("warn", f"Transaction from {peer_id} is invalid")
             return
-        
+
         self.__log("info", f"Transaction from {peer_id} is valid")
         self.mempool.append(transaction)
         for u in self.get_peers():
@@ -248,34 +248,25 @@ class NepheriteNode(Blockchain):
             # find the last block that is in the chain
             # TODO: Implement rollback
 
-    def apply_transaction(self, transaction: Transaction) -> None:
-        ret = defaultdict(0)
-        sum = 0  # noqa: A001
+    def get_transaction_trace(self, transaction: Transaction) -> dict[bytes, int]:
+        ret = {}
+        out = 0
         for utxo in transaction.payload.output:
             addr = utxo.address
             amount = utxo.amount
             ret[addr] += amount
-            sum += amount  # noqa: A001
+            out += amount
         pk = self.crypto.key_from_public_bin(transaction.pk)
         addr = pk.key_to_hash()
-        ret[addr] -= sum
+        ret[addr] -= out
         return ret
-
-    def apply_transaction_on_block(self, block: Block) -> bool:
-        cache = {}
-        for tx in block.transactions:
-            r = self.apply_transaction(tx)
-            for k, v in r.items():
-                cache[k] += v
-        return all(self.chainstate[k] + v >= 0 for k, v in cache.items())
-            
 
     @message_wrapper(Block)
     def on_block(self, peer: Peer, block: Block) -> None:
         self.__log("info", f"Block {block.header.seq_num} received")
         # if not self.verify_block(block):
         #     return
-        
+
         # self.__log("info", f"Block {block.header.seq_num} verified")
         # # block_hash = self.get_block_hash(block.header)  # noqa: A001
         # # self.blocks[block_hash] = block
@@ -294,13 +285,21 @@ class NepheriteNode(Blockchain):
             previous_block = self.load_block(self.last_seq_num)
             prev_block_hash = previous_block.header.prev_block_hash
         else:
+            # Genesis block
             prev_block_hash = b"\x00" * 32
 
-        transactions = [
-            self.build_coinbase_transaction(),
-        ] + self.mempool[: BLOCK_SIZE - 1]
-        tree = MerkleTree(transactions)
+        transactions = [self.build_coinbase_transaction()]
 
+        # Include transactions from mempool
+        for tx in self.mempool:
+            if len(transactions) >= BLOCK_SIZE:
+                break
+            ret = self.get_transaction_trace(tx)
+            if all(self.chainstate[k] + v >= 0 for k, v in ret.items()):
+                transactions.append(tx)
+            self.mempool.pop(tx.sign)
+
+        tree = MerkleTree(transactions)
         header = BlockHeader(
             seq_num=self.last_seq_num + 1,
             prev_block_hash=prev_block_hash,
@@ -309,7 +308,6 @@ class NepheriteNode(Blockchain):
             difficulty=BLOCK_DIFFICULTY,
             nonce=0,
         )
-
         return Block(header, transactions)
 
     def mine_block(self) -> Block:

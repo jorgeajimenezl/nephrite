@@ -5,7 +5,7 @@ The Blockchain implemented is meant to be a simple implementation of a blockchai
 
 The Report for the weeks can be found in the following links:
 
-* [week 1](docs/week_1_report.md)
+* [Week 1](docs/week_1_report.md)
 
 ## Application
 To Be Discussed
@@ -39,5 +39,5 @@ python -m nepherite // more arguments to be added this is not working yet
 - Jorge Jiménez <<jorgeajimenezl17@gmail.com>>
 - Mariano Rodriguez <<mjasonrc@gmail.com>>
 - Victor Lopez <<victor.98.javier@gmail.com>>
-- Samuel Suares<<samueldsr8@gmail.com>>
-- Fernando Valdes<<fvaldes0109@gmail.com>>
+- Samuel Suares <<samueldsr8@gmail.com>>
+- Fernando Valdes <<fvaldes0109@gmail.com>>
