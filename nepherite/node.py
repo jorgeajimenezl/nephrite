@@ -280,6 +280,28 @@ class NepheriteNode(Blockchain):
         output = [Utxo(self.my_peer.mid, BLOCK_REWARD)]
         return self.make_and_sign_transaction(output)
 
+    def apply_transaction(self, deltas: dict[bytes, int], chain_state: dict[bytes, int], sign: int = 1):
+        for address, value in deltas.items():
+            chain_state[address] += value * sign
+
+    def build_valid_transactions_for_block(self) -> list[Transaction]:
+        """
+        Get valid transactions from mempool
+        Delete invalid transactions from mempool while iterating
+        Returns:
+            list[Transaction]: List of valid transactions for the next block
+        """
+        valid_transactions = []
+        for tx in self.mempool:
+            transaction = self.mempool[tx]
+            deltas = self.get_transaction_trace(transaction)
+            if all(self.chainstate[address] + value >= 0 for address, value in deltas.items()):
+                valid_transactions.append(transaction)
+                self.apply_transaction(deltas, self.chainstate)
+            self.mempool.pop(tx)
+        return valid_transactions
+
+
     def build_block(self) -> Block:
         if self.last_seq_num != 0:
             previous_block = self.load_block(self.last_seq_num)
@@ -291,15 +313,9 @@ class NepheriteNode(Blockchain):
         transactions = [self.build_coinbase_transaction()]
 
         # Include transactions from mempool
-        for tx in self.mempool:
-            if len(transactions) >= BLOCK_SIZE:
-                break
-            ret = self.get_transaction_trace(tx)
-            if all(self.chainstate[k] + v >= 0 for k, v in ret.items()):
-                transactions.append(tx)
-            self.mempool.pop(tx.sign)
+        transactions += self.build_valid_transactions_for_block()
 
-        tree = MerkleTree(transactions)
+        tree = MerkleTree([tx.sign for tx in transactions])
         header = BlockHeader(
             seq_num=self.last_seq_num + 1,
             prev_block_hash=prev_block_hash,

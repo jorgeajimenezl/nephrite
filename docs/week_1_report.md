@@ -19,7 +19,7 @@ Nodes within the network are required to establish a minimum of 8 connections an
 
 ## Block Structure
 
-![Block Structure](/imgs/drawing.png)
+![Block Structure](/docs/imgs/drawing.png)
 
 ## Tests
 
