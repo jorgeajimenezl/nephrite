@@ -3,7 +3,6 @@ import os
 import random
 import time
 from collections import defaultdict
-from typing import Literal
 
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import dataclass
@@ -13,7 +12,7 @@ from ipv8.types import Peer
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
-from nepherite.utils import logging, sha256
+from nepherite.utils import sha256
 
 BLOCK_SIZE = 4
 BLOCK_REWARD = 100
@@ -81,7 +80,7 @@ class NepheriteNode(Blockchain):
 
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
-        self.chainstate: dict[bytes, int] = defaultdict(0)
+        self.chainstate: dict[bytes, int] = defaultdict(int)
         self.is_mining = False
 
         self.add_message_handler(BlockHeader, self.on_block_header)
@@ -96,17 +95,6 @@ class NepheriteNode(Blockchain):
         self.register_anonymous_task(
             "start_to_create_block", self.start_to_create_block, interval=3
         )
-
-    def __log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
-        match level:
-            case "info":
-                logging.info(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
-            case "warn":
-                logging.warn(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
-            case "error":
-                logging.error(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
-            case "debug":
-                logging.debug(f"Node {self.my_peer.mid.hex()[:6]}: {msg}")
 
     def start_to_create_block(self):
         self.__log("info", "Start to create block")
@@ -280,7 +268,9 @@ class NepheriteNode(Blockchain):
         output = [Utxo(self.my_peer.mid, BLOCK_REWARD)]
         return self.make_and_sign_transaction(output)
 
-    def apply_transaction(self, deltas: dict[bytes, int], chain_state: dict[bytes, int], sign: int = 1):
+    def apply_transaction(
+        self, deltas: dict[bytes, int], chain_state: dict[bytes, int], sign: int = 1
+    ):
         for address, value in deltas.items():
             chain_state[address] += value * sign
 
@@ -295,12 +285,14 @@ class NepheriteNode(Blockchain):
         for tx in self.mempool:
             transaction = self.mempool[tx]
             deltas = self.get_transaction_trace(transaction)
-            if all(self.chainstate[address] + value >= 0 for address, value in deltas.items()):
+            if all(
+                self.chainstate[address] + value >= 0
+                for address, value in deltas.items()
+            ):
                 valid_transactions.append(transaction)
                 self.apply_transaction(deltas, self.chainstate)
             self.mempool.pop(tx)
         return valid_transactions
-
 
     def build_block(self) -> Block:
         if self.last_seq_num != 0:

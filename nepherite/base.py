@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import random
-import typing
 from asyncio import Event
 from collections.abc import Callable
+from typing import Literal, TypeVar
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.lazy_community import lazy_wrapper
@@ -12,7 +12,7 @@ from ipv8.types import LazyWrappedHandler, MessageHandlerFunction, Peer
 
 from nepherite.utils import logging
 
-DataclassPayload = typing.TypeVar("DataclassPayload")
+DataclassPayload = TypeVar("DataclassPayload")
 AnyPayload = Payload | DataclassPayload
 
 
@@ -33,6 +33,12 @@ class Blockchain(Community):
     def node_id_from_peer(self, peer: Peer):
         return next((key for key, p in self.nodes.items() if p == peer), None)
 
+    def __log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
+        logging.log(
+            logging._nameToLevel[level.upper()],
+            f"Node {self.my_peer.mid.hex()[:12]}: {msg}",
+        )
+
     async def started(
         self,
         node_id: int,
@@ -40,7 +46,7 @@ class Blockchain(Community):
         event: Event,
         use_localhost: bool = True,
     ) -> None:
-        logging.debug(f"Node {self.my_peer.mid.hex()} started")
+        self.__log("info", "Started!!")
 
         self.event = event
         self.node_id = node_id
@@ -65,9 +71,7 @@ class Blockchain(Community):
                     return
                 valid = True
                 self.nodes[node_id] = conn_nodes[0]
-                logging.debug(
-                    f"# node {self.my_peer.mid.hex()[:6]} store {conn_nodes[0]} with {node_id}"
-                )
+                self.__log(f"Store {conn_nodes[0]} with {node_id}")
             if not valid:
                 return
             print(
