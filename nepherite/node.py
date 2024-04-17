@@ -313,7 +313,7 @@ class NepheriteNode(Blockchain):
         transactions = [self.build_coinbase_transaction()]
 
         # Include transactions from mempool
-        transactions += self.get_valid_transactions()
+        transactions += self.build_valid_transactions_for_block()
 
         tree = MerkleTree([tx.sign for tx in transactions])
         header = BlockHeader(
