@@ -214,7 +214,7 @@ class NepheriteNode(Blockchain):
         self.ez_send(peer, self.blockset[block_hash])           
 
     def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
-        deltas = {}
+        deltas = defaultdict(int)
         out = 0
         for utxo in transaction.payload.output:
             addr = utxo.address
@@ -343,8 +343,9 @@ class NepheriteNode(Blockchain):
             list[Transaction]: List of valid transactions for the next block
         """
         valid_transactions = []
-        for tx in self.mempool:
-            transaction = self.mempool[tx]
+        mempool_copy = self.mempool.copy()
+        for tx in mempool_copy:
+            transaction = mempool_copy[tx]
             deltas = self.get_transaction_deltas(transaction)
             if all(
                 self.chainstate[address] + value >= 0

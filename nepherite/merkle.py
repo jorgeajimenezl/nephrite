@@ -1,13 +1,18 @@
-from typing import Any
+from typing import Self
 
 from nepherite.utils import sha256
 
 
 class MerkleTree:
     class Node:
+        def __init__(self, hash_: bytes, left: Self | None, right: Self | None) -> None:
+            self.hash = hash_
+            self.left = left
+            self.right = right
+
         hash: bytes
-        left: Any
-        right: Any
+        left: Self | None
+        right: Self | None
 
     def __init__(self, items: list[bytes]) -> None:
         self.items = items
