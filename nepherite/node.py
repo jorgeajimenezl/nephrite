@@ -1,4 +1,5 @@
 import asyncio
+import os
 import random
 import time
 from collections import defaultdict
@@ -21,15 +22,15 @@ K = 2
 
 
 @dataclass
-class Utxo:
+class TxOut:
     address: bytes
     amount: int
 
 
 @dataclass
 class TransactionPayload:
-    timestamp: int
-    output: list[Utxo]
+    nonce: int
+    output: list[TxOut]
 
 
 @dataclass(msg_id=1)
@@ -99,10 +100,13 @@ class NepheriteNode(Blockchain):
         if len(self.mempool) >= BLOCK_SIZE:
             self._log("info", "Start mining")
             try:
+                self.is_mining = True
                 block = self.mine_block()
             except Exception:
                 self._log("error", "Failed to mine block, non enough transactions")
                 return
+            finally:
+                self.is_mining = False
             self._log("info", "Block mined")
 
             for peer in self.get_peers():
@@ -111,7 +115,7 @@ class NepheriteNode(Blockchain):
 
     def create_dummy_transaction(self):
         peer = random.choice(self.get_peers())
-        out = [Utxo(peer.mid, 100)]
+        out = [TxOut(peer.mid, 100)]
 
         for peer in self.get_peers():
             if peer.mid != self.my_peer.mid:
@@ -134,9 +138,9 @@ class NepheriteNode(Blockchain):
             blob = f.read()
         return self.serializer.unpack_serializable(blob, Block)
 
-    def make_and_sign_transaction(self, output: list[Utxo]) -> Transaction:
+    def make_and_sign_transaction(self, output: list[TxOut]) -> Transaction:
         payload = TransactionPayload(
-            timestamp=int(time.monotonic_ns() // 1_000),
+            nonce=int.from_bytes(os.urandom(8)),
             output=output,
         )
         blob = self.serializer.pack_serializable(payload)
@@ -326,7 +330,7 @@ class NepheriteNode(Blockchain):
                     self.apply_transaction(deltas, self.chainstate)
 
     def build_coinbase_transaction(self) -> Transaction:
-        output = [Utxo(self.my_peer.mid, BLOCK_REWARD)]
+        output = [TxOut(self.my_peer.mid, BLOCK_REWARD)]
         return self.make_and_sign_transaction(output)
 
     def apply_transaction(
