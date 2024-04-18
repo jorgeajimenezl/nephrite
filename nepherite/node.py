@@ -79,6 +79,7 @@ class NepheriteNode(Blockchain):
 
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(Block, self.on_block)
+        self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
 
     def on_start(self):
         self.register_anonymous_task(
@@ -199,6 +200,18 @@ class NepheriteNode(Blockchain):
         for u in self.get_peers():
             if u.mid != peer.mid:
                 self.ez_send(u, transaction)
+
+    @message_wrapper(PullBlockRequest)
+    def on_pull_block_request(self, peer: Peer, request: PullBlockRequest) -> None:
+        block_hash = request.block_hash
+        if block_hash not in self.blockset:
+            self.__log("warn", "Block is not in the chain")
+            for near in self.get_peers():
+                if near.mid == peer.mid:
+                    continue
+                self.ez_send(near, PullBlockRequest(block_hash))
+            return
+        self.ez_send(peer, self.blockset[block_hash])           
 
     def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
         deltas = {}
