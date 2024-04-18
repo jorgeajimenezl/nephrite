@@ -27,5 +27,5 @@ class HashNoncePuzzle(Puzzle[int]):
 
     @staticmethod
     def verify(data: bytes, answer: int) -> bool:
-        hash = sha256(data, answer.to_bytes(4))  # noqa: A001
-        return all(hash[i] == 0 for i in range(DIFFICULTY))
+        hash = sha256(data, answer.to_bytes(4)).hex()  # noqa: A001
+        return all(hash[i] == '0' for i in range(DIFFICULTY))
