@@ -33,7 +33,7 @@ class Blockchain(Community):
     def node_id_from_peer(self, peer: Peer):
         return next((key for key, p in self.nodes.items() if p == peer), None)
 
-    def __log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
+    def _log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
         logging.log(
             logging._nameToLevel[level.upper()],
             f"Node {self.my_peer.mid.hex()[:12]}: {msg}",
@@ -46,7 +46,7 @@ class Blockchain(Community):
         event: Event,
         use_localhost: bool = True,
     ) -> None:
-        self.__log("info", "Started!!")
+        self._log("info", "Started!!")
 
         self.event = event
         self.node_id = node_id
@@ -71,7 +71,7 @@ class Blockchain(Community):
                     return
                 valid = True
                 self.nodes[node_id] = conn_nodes[0]
-                self.__log(f"Store {conn_nodes[0]} with {node_id}")
+                self._log("info", f"Store {conn_nodes[0]} with {node_id}")
             if not valid:
                 return
             print(

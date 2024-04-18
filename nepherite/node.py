@@ -90,24 +90,24 @@ class NepheriteNode(Blockchain):
         )
 
     def start_to_create_block(self):
-        self.__log("info", "Start to create block")
+        self._log("info", "Start to create block")
 
         if self.is_mining:
-            self.__log("warn", "Already mining")
+            self._log("warn", "Already mining")
             return
 
         if len(self.mempool) >= BLOCK_SIZE:
-            self.__log("info", "Start mining")
+            self._log("info", "Start mining")
             try:
                 block = self.mine_block()
             except Exception:
-                self.__log("error", "Failed to mine block, non enough transactions")
+                self._log("error", "Failed to mine block, non enough transactions")
                 return
-            self.__log("info", "Block mined")
+            self._log("info", "Block mined")
 
             for peer in self.get_peers():
                 self.ez_send(peer, block)
-                self.__log("info", f"Block sent to {peer.mid.hex()[:6]}")
+                self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
 
     def create_dummy_transaction(self):
         peer = random.choice(self.get_peers())
@@ -117,7 +117,7 @@ class NepheriteNode(Blockchain):
             if peer.mid != self.my_peer.mid:
                 tx = self.make_and_sign_transaction(out)
                 self.ez_send(peer, tx)
-                self.__log("debug", f"Sent tx to {peer.mid.hex()[:6]}")
+                self._log("debug", f"Sent tx to {peer.mid.hex()[:6]}")
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)
@@ -186,16 +186,16 @@ class NepheriteNode(Blockchain):
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
         # TODO: remove this debug
         peer_id = self.node_id_from_peer(peer)
-        self.__log("info", f"Transaction from {peer_id} received")
+        self._log("info", f"Transaction from {peer_id} received")
 
         if self.mempool.get(transaction.sign) is not None:
-            self.__log("info", f"Transaction from {peer_id} is already in mempool")
+            self._log("info", f"Transaction from {peer_id} is already in mempool")
             return
         if not self.verify_transaction(transaction):
-            self.__log("warn", f"Transaction from {peer_id} is invalid")
+            self._log("warn", f"Transaction from {peer_id} is invalid")
             return
 
-        self.__log("info", f"Transaction from {peer_id} is valid")
+        self._log("info", f"Transaction from {peer_id} is valid")
         self.mempool[transaction.sign] = transaction
         for u in self.get_peers():
             if u.mid != peer.mid:
@@ -205,7 +205,7 @@ class NepheriteNode(Blockchain):
     def on_pull_block_request(self, peer: Peer, request: PullBlockRequest) -> None:
         block_hash = request.block_hash
         if block_hash not in self.blockset:
-            self.__log("warn", "Block is not in the chain")
+            self._log("warn", "Block is not in the chain")
             for near in self.get_peers():
                 if near.mid == peer.mid:
                     continue
@@ -252,10 +252,10 @@ class NepheriteNode(Blockchain):
 
     @message_wrapper(Block)
     def on_block(self, peer: Peer, block: Block) -> None:
-        self.__log("info", f"Block {block.header.seq_num} received")
+        self._log("info", f"Block {block.header.seq_num} received")
 
         if not self.stateless_block_verification(block):
-            self.__log("warn", f"Block {block.header.seq_num} is invalid")
+            self._log("warn", f"Block {block.header.seq_num} is invalid")
             return
 
         # self.blocks[block.seq_num].append(block)
@@ -267,20 +267,20 @@ class NepheriteNode(Blockchain):
                 continue
 
             self.ez_send(near, block)
-            self.__log("info", f"Block sent to {near.mid.hex()[:6]}")
+            self._log("info", f"Block sent to {near.mid.hex()[:6]}")
 
         if block.header.prev_block_hash not in self.blockset:
-            self.__log("warn", "Block is not in the chain")
+            self._log("warn", "Block is not in the chain")
             self.ez_send(peer, PullBlockRequest(block.header.prev_block_hash))
             return
         else:
             if block.header.seq_num >= self.current_seq_num + K:
                 # TODO: implement chain reorganization
-                self.__log("info", "Chain reorganization")
+                self._log("info", "Chain reorganization")
                 lca, deltas, path = self.rollback(block_hash)
 
                 if lca is None:
-                    self.__log("warn", "Failed to find LCA")
+                    self._log("warn", "Failed to find LCA")
                     return
 
                 flag = True
@@ -294,7 +294,7 @@ class NepheriteNode(Blockchain):
                             ):
                                 self.apply_transaction(dt, deltas)
                             else:
-                                self.__log("warn", "Invalid transaction")
+                                self._log("warn", "Invalid transaction")
                                 # TODO: mark block as invalid
                                 self.invalid_blocks.add(block_path)
                                 self.blockset.pop(block_path)
