@@ -78,9 +78,29 @@ class NepheriteNode(Blockchain):
         self.chainstate: dict[bytes, int] = defaultdict(int)
         self.is_mining = False
 
+        self.seed_genesis_block()
+
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(Block, self.on_block)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
+
+    def seed_genesis_block(self):
+        genesis_block = Block(
+            BlockHeader(
+                seq_num=0,
+                prev_block_hash=b"\x00" * 32,
+                merkle_root_hash=b"\x00" * 32,
+                timestamp=0,
+                difficulty=BLOCK_DIFFICULTY,
+                nonce=0,
+            ),
+            [],
+        )
+        self.save_block(genesis_block)
+        self.current_block_hash = self.get_block_hash(genesis_block.header)
+        self.genesis_block_hash = self.current_block_hash
+        self.current_seq_num = 0
+        self.blockset[self.current_block_hash] = genesis_block
 
     def on_start(self):
         self.register_anonymous_task(
@@ -97,25 +117,29 @@ class NepheriteNode(Blockchain):
             self._log("warn", "Already mining")
             return
 
-        if len(self.mempool) >= BLOCK_SIZE:
-            self._log("info", "Start mining")
-            try:
-                self.is_mining = True
-                block = self.mine_block()
-            except Exception:
-                self._log("error", "Failed to mine block, non enough transactions")
-                return
-            finally:
-                self.is_mining = False
-            self._log("info", "Block mined")
+        self._log("info", "Start mining")
+        try:
+            self.is_mining = True
+            block = self.mine_block()           
+            self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
+            self._log("info", f"Block {block.header.seq_num} mined")
 
             for peer in self.get_peers():
                 self.ez_send(peer, block)
                 self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
+        except Exception as e:
+            self._log("error", str(e))
+            return
+        finally:
+            self.is_mining = False
 
     def create_dummy_transaction(self):
+        cnt = self.chainstate[self.my_peer.mid]
+        if cnt < 10:
+            return
+
         peer = random.choice(self.get_peers())
-        out = [TxOut(peer.mid, 100)]
+        out = [TxOut(peer.mid, min(cnt, 10))]
 
         for peer in self.get_peers():
             if peer.mid != self.my_peer.mid:
@@ -129,7 +153,7 @@ class NepheriteNode(Blockchain):
 
     def save_block(self, block: Block) -> bool:
         blob = self.serializer.pack_serializable(block)
-        with open(f"data/blocks/{block.seq_num}", "wb") as f:
+        with open(f"data/blocks/{block.header.seq_num}", "wb") as f:
             f.write(blob)
         return True
 
@@ -215,7 +239,7 @@ class NepheriteNode(Blockchain):
                     continue
                 self.ez_send(near, PullBlockRequest(block_hash))
             return
-        self.ez_send(peer, self.blockset[block_hash])           
+        self.ez_send(peer, self.blockset[block_hash])
 
     def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
         deltas = defaultdict(int)
@@ -256,7 +280,7 @@ class NepheriteNode(Blockchain):
 
     @message_wrapper(Block)
     def on_block(self, peer: Peer, block: Block) -> None:
-        self._log("info", f"Block {block.header.seq_num} received")
+        self._log("info", f"Block {block.header.seq_num} received from {peer.mid.hex()[:6]}")
 
         if not self.stateless_block_verification(block):
             self._log("warn", f"Block {block.header.seq_num} is invalid")
@@ -349,6 +373,8 @@ class NepheriteNode(Blockchain):
         valid_transactions = []
         deleted_transactions = []
         for tx in self.mempool.values():
+            if len(valid_transactions) >= BLOCK_SIZE - 1:
+                break
             deltas = self.get_transaction_deltas(tx)
             if all(
                 self.chainstate[address] + value >= 0
@@ -362,24 +388,14 @@ class NepheriteNode(Blockchain):
         return valid_transactions
 
     def build_block(self) -> Block:
-        if self.current_seq_num != 0:
-            previous_block = self.load_block(self.current_seq_num)
-            prev_block_hash = previous_block.header.prev_block_hash
-        else:
-            # Genesis block
-            prev_block_hash = b"\x00" * 32
-
         transactions = [self.build_coinbase_transaction()]
-
         # Include transactions from mempool
         transactions += self.build_valid_transactions_for_block()
-        if len(transactions) == BLOCK_SIZE:
-            raise Exception("Not enough transactions")
-
         tree = MerkleTree([tx.sign for tx in transactions])
+
         header = BlockHeader(
             seq_num=self.current_seq_num + 1,
-            prev_block_hash=prev_block_hash,
+            prev_block_hash=self.current_block_hash,
             merkle_root_hash=tree.root.hash,
             timestamp=time.monotonic_ns() // 1_000,
             difficulty=BLOCK_DIFFICULTY,
@@ -391,5 +407,5 @@ class NepheriteNode(Blockchain):
         block = self.build_block()
         blob = self.serializer.pack_serializable(block.header)
         answer = Puzzle.compute(blob)
-        block.header.nonce = answer
+        block.header.nonce = answer        
         return block

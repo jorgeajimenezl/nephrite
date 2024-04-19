@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import traceback
 from asyncio import Event
 from collections.abc import Callable
 from typing import Literal, TypeVar
@@ -36,8 +37,11 @@ class Blockchain(Community):
     def _log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
         logging.log(
             logging._nameToLevel[level.upper()],
-            f"Node {self.my_peer.mid.hex()[:12]}: {msg}",
+            f"Node {self.my_peer.mid.hex()[:5]}: {msg}",
         )
+
+        if level == "error":
+            logging.error(traceback.format_exc())
 
     async def started(
         self,
