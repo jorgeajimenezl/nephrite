@@ -9,6 +9,7 @@ from typing import Literal, TypeVar
 from ipv8.community import Community, CommunitySettings
 from ipv8.lazy_community import lazy_wrapper
 from ipv8.messaging.serialization import Payload
+from ipv8.peerdiscovery.network import PeerObserver
 from ipv8.types import LazyWrappedHandler, MessageHandlerFunction, Peer
 
 from nepherite.utils import logging
@@ -24,12 +25,18 @@ def message_wrapper(
     return lazy_wrapper(*payloads)
 
 
-class Blockchain(Community):
+class Blockchain(Community, PeerObserver):
     community_id = b"matadores_ledgersuwu"
 
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
         self.event: Event = None
+
+    def on_peer_added(self, peer: Peer) -> None:
+        print("I am:", self.my_peer, "I found:", peer)
+
+    def on_peer_removed(self, peer: Peer) -> None:
+        pass
 
     def _log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
         logging.log(
@@ -83,6 +90,7 @@ class Blockchain(Community):
     ) -> None:
         self._log("info", "Started!!")
         self.event = event
+        self.network.add_peer_observer(self)
 
         if use_localhost:
             await self.setup_localhost(node_id, connections)
