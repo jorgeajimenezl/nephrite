@@ -76,5 +76,5 @@ if __name__ == "__main__":
             connections = topology[node_id]
     else:
         connections = []
-        
+
     asyncio.run(start_communities(node_id, connections, args.local))

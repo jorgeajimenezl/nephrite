@@ -69,7 +69,7 @@ class Blockchain(Community, PeerObserver):
                 self._log("info", f"Store {conn_nodes[0]} with {node_id}")
             if not valid:
                 return
-            
+
             self._log("info", "Fully connected to all nodes in the topology")
             self.cancel_pending_task("ensure_nodes_connected")
             self._log("info", "Starting")

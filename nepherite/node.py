@@ -11,12 +11,12 @@ from ipv8.types import Peer
 # from rocksdict import Options, Rdict
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
+from nepherite.puzzle import DIFFICULTY as BLOCK_DIFFICULTY
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import sha256
 
 BLOCK_SIZE = 4
 BLOCK_REWARD = 100
-BLOCK_DIFFICULTY = 6
 RETRY_COUNT = 3
 K = 2
 
@@ -258,21 +258,21 @@ class NepheriteNode(Blockchain):
         u = self.current_block_hash
         path = []
 
-        while self.blockset[u].seq_num < self.blockset[v].seq_num:
+        while self.blockset[u].header.seq_num < self.blockset[v].heade.seq_num:
             path.append(v)
-            v = self.blockset[v].prev_block_hash
+            v = self.blockset[v].header.prev_block_hash
             if v not in self.blockset:
                 return None, {}, []
 
-        deltas = {}
+        deltas = defaultdict(int)
         while u != v:
             for tx in self.blockset[u].transactions:
                 dt = self.get_transaction_deltas(tx)
                 self.apply_transaction(dt, deltas, -1)
 
             path.append(v)
-            u = self.blockset[u].prev_block_hash
-            v = self.blockset[v].prev_block_hash
+            u = self.blockset[u].header.prev_block_hash
+            v = self.blockset[v].header.prev_block_hash
             if u not in self.blockset or v not in self.blockset:
                 return None, {}, []
 
@@ -340,14 +340,14 @@ class NepheriteNode(Blockchain):
                         for tx in self.blockset[ptr].transactions:
                             if tx.sign in self.mempool:
                                 self.mempool.pop(tx.sign)
-                        ptr = self.blockset[ptr].prev_block_hash
+                        ptr = self.blockset[ptr].header.prev_block_hash
 
                     # Fast forward transactions from mempool
                     ptr = block_hash
                     while ptr != lca:
                         for tx in self.blockset[ptr].transactions:
                             self.mempool[tx.sign] = tx
-                        ptr = self.blockset[ptr].prev_block_hash
+                        ptr = self.blockset[ptr].header.prev_block_hash
 
                     self.current_block_hash = block_hash
                     self.current_seq_num = block.header.seq_num
