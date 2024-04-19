@@ -52,4 +52,22 @@ class NepheriteNodeTests(TestBase):
             
         # Assert that the received pull block request is the same as the sent pull block request
         self.assertEqual(pull_block_request, received_messages[0])
-
+        
+    async def test_node_methods(self):
+        
+        self.initialize(NepheriteNode, 3)
+        
+        await self.introduce_nodes()
+        
+        # Test the create_dummy_transaction method
+        with self.assertReceivedBy(1, [Transaction]) as received_messages:
+            self.overlay(0).create_dummy_transaction()
+            await self.deliver_messages()
+        
+        # Assert that peer_1 received the dummy transaction and that it is signed and from the correct address
+        transaction = received_messages[0]
+        pk = self.overlay(0).crypto.key_from_public_bin(transaction.pk)
+        addr = pk.key_to_hash()
+        blob = self.overlay(0).serializer.pack_serializable(transaction.payload)
+        self.assertTrue(self.overlay(0).crypto.is_valid_signature(pk, blob, transaction.sign))
+        self.assertEqual(addr, self.overlay(0).my_peer.mid)
