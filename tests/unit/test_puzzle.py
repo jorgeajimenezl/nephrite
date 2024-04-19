@@ -1,7 +1,8 @@
 from unittest import TestCase
 
-from nepherite.puzzle import HashNoncePuzzle, DIFFICULTY
+from nepherite.puzzle import DIFFICULTY, HashNoncePuzzle
 from nepherite.utils import sha256
+
 
 class PuzzleTests(TestCase):
     def testPuzzle(self):

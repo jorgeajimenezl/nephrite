@@ -140,7 +140,7 @@ class NepheriteNode(Blockchain):
 
     def make_and_sign_transaction(self, output: list[TxOut]) -> Transaction:
         payload = TransactionPayload(
-            nonce=int.from_bytes(os.urandom(8)),
+            nonce=int.from_bytes(os.urandom(4)),
             output=output,
         )
         blob = self.serializer.pack_serializable(payload)
@@ -347,17 +347,18 @@ class NepheriteNode(Blockchain):
             list[Transaction]: List of valid transactions for the next block
         """
         valid_transactions = []
-        mempool_copy = self.mempool.copy()
-        for tx in mempool_copy:
-            transaction = mempool_copy[tx]
-            deltas = self.get_transaction_deltas(transaction)
+        deleted_transactions = []
+        for tx in self.mempool.values():
+            deltas = self.get_transaction_deltas(tx)
             if all(
                 self.chainstate[address] + value >= 0
                 for address, value in deltas.items()
             ):
-                valid_transactions.append(transaction)
+                valid_transactions.append(tx)
                 self.apply_transaction(deltas, self.chainstate)
-            self.mempool.pop(tx)
+            deleted_transactions.append(tx)
+        for tx in deleted_transactions:
+            self.mempool.pop(tx.sign)
         return valid_transactions
 
     def build_block(self) -> Block:
