@@ -74,7 +74,7 @@ class Blockchain(Community, PeerObserver):
             self.cancel_pending_task("ensure_nodes_connected")
             self._log("info", "Starting")
 
-            delay = random.uniform(1.0, 3.0)
+            delay = random.uniform(10.0, 15.0)
             self.register_anonymous_task("delayed_start", self.on_start, delay=delay)
 
         self.register_task(

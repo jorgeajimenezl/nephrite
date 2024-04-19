@@ -122,6 +122,7 @@ class NepheriteNode(Blockchain):
             self.is_mining = True
             block = self.mine_block()
             self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
+            self.current_block_hash = self.get_block_hash(block.header)
             self._log("info", f"Block {block.header.seq_num} mined")
 
             for peer in self.get_peers():
@@ -231,14 +232,16 @@ class NepheriteNode(Blockchain):
 
     @message_wrapper(PullBlockRequest)
     def on_pull_block_request(self, peer: Peer, request: PullBlockRequest) -> None:
+        self._log("info", f"Pull Request received from {peer.mid.hex()[:6]}")
         block_hash = request.block_hash
         if block_hash not in self.blockset:
-            self._log("warn", "Block is not in the chain")
+            self._log("warn", "Block is not in the my chain")
             for near in self.get_peers():
                 if near.mid == peer.mid:
                     continue
                 self.ez_send(near, PullBlockRequest(block_hash))
             return
+        self._log("info", "Block sent")
         self.ez_send(peer, self.blockset[block_hash])
 
     def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
@@ -258,7 +261,7 @@ class NepheriteNode(Blockchain):
         u = self.current_block_hash
         path = []
 
-        while self.blockset[u].header.seq_num < self.blockset[v].heade.seq_num:
+        while self.blockset[u].header.seq_num < self.blockset[v].header.seq_num:
             path.append(v)
             v = self.blockset[v].header.prev_block_hash
             if v not in self.blockset:
@@ -354,6 +357,7 @@ class NepheriteNode(Blockchain):
 
                     # Update chainstate (UTXOs)
                     self.apply_transaction(deltas, self.chainstate)
+                    self._log("info", "Chain reorganization completed")
 
     def build_coinbase_transaction(self) -> Transaction:
         output = [TxOut(self.my_peer.mid, BLOCK_REWARD)]
