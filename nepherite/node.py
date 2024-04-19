@@ -97,21 +97,20 @@ class NepheriteNode(Blockchain):
             self._log("warn", "Already mining")
             return
 
-        if len(self.mempool) >= BLOCK_SIZE:
-            self._log("info", "Start mining")
-            try:
-                self.is_mining = True
-                block = self.mine_block()
-            except Exception:
-                self._log("error", "Failed to mine block, non enough transactions")
-                return
-            finally:
-                self.is_mining = False
+        self._log("info", "Start mining")
+        try:
+            self.is_mining = True
+            block = self.mine_block()
             self._log("info", "Block mined")
 
             for peer in self.get_peers():
                 self.ez_send(peer, block)
                 self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
+        except Exception:
+            self._log("error", "Failed to mine block, non enough transactions")
+            return
+        finally:
+            self.is_mining = False
 
     def create_dummy_transaction(self):
         cnt = self.chainstate[self.my_peer.mid]
@@ -219,7 +218,7 @@ class NepheriteNode(Blockchain):
                     continue
                 self.ez_send(near, PullBlockRequest(block_hash))
             return
-        self.ez_send(peer, self.blockset[block_hash])           
+        self.ez_send(peer, self.blockset[block_hash])
 
     def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
         deltas = defaultdict(int)
@@ -353,6 +352,8 @@ class NepheriteNode(Blockchain):
         valid_transactions = []
         deleted_transactions = []
         for tx in self.mempool.values():
+            if len(valid_transactions) >= BLOCK_SIZE - 1:
+                break
             deltas = self.get_transaction_deltas(tx)
             if all(
                 self.chainstate[address] + value >= 0
@@ -374,13 +375,10 @@ class NepheriteNode(Blockchain):
             prev_block_hash = b"\x00" * 32
 
         transactions = [self.build_coinbase_transaction()]
-
         # Include transactions from mempool
         transactions += self.build_valid_transactions_for_block()
-        if len(transactions) == BLOCK_SIZE:
-            raise Exception("Not enough transactions")
-
         tree = MerkleTree([tx.sign for tx in transactions])
+
         header = BlockHeader(
             seq_num=self.current_seq_num + 1,
             prev_block_hash=prev_block_hash,
