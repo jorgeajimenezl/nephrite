@@ -114,8 +114,12 @@ class NepheriteNode(Blockchain):
                 self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
 
     def create_dummy_transaction(self):
+        cnt = self.chainstate[self.my_peer.mid]
+        if cnt < 10:
+            return
+
         peer = random.choice(self.get_peers())
-        out = [TxOut(peer.mid, 100)]
+        out = [TxOut(peer.mid, min(cnt, 10))]
 
         for peer in self.get_peers():
             if peer.mid != self.my_peer.mid:
