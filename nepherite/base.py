@@ -15,6 +15,7 @@ from nepherite.utils import logging
 
 DataclassPayload = TypeVar("DataclassPayload")
 AnyPayload = Payload | DataclassPayload
+BASE_PORT = 9090
 
 
 def message_wrapper(
@@ -29,10 +30,6 @@ class Blockchain(Community):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
         self.event: Event = None
-        self.nodes: dict[int, Peer] = {}
-
-    def node_id_from_peer(self, peer: Peer):
-        return next((key for key, p in self.nodes.items() if p == peer), None)
 
     def _log(self, level: Literal["info", "warn", "error", "debug"], msg: str):
         logging.log(
@@ -43,6 +40,40 @@ class Blockchain(Community):
         if level == "error":
             logging.error(traceback.format_exc())
 
+    async def setup_localhost(self, node_id: int, connections: list[int]):
+        self._log("info", "Setting up localhost")
+        self._log("info", f"Node ID: {node_id}")
+
+        connections: list[tuple[str, int]] = [(x, BASE_PORT + x) for x in connections]
+        host_network, *_ = self._get_lan_address()
+
+        async def _ensure_nodes_connected() -> None:
+            for _, port in connections:
+                addr = (host_network, port)
+                self.walk_to(addr)
+            valid = False
+            conn_nodes = []
+
+            for node_id, port in connections:
+                conn_nodes = [p for p in self.get_peers() if p.address[1] == port]
+                if len(conn_nodes) == 0:
+                    return
+                valid = True
+                self._log("info", f"Store {conn_nodes[0]} with {node_id}")
+            if not valid:
+                return
+            
+            self._log("info", "Fully connected to all nodes in the topology")
+            self.cancel_pending_task("ensure_nodes_connected")
+            self._log("info", "Starting")
+
+            delay = random.uniform(1.0, 3.0)
+            self.register_anonymous_task("delayed_start", self.on_start, delay=delay)
+
+        self.register_task(
+            "ensure_nodes_connected", _ensure_nodes_connected, interval=0.5, delay=1
+        )
+
     async def started(
         self,
         node_id: int,
@@ -51,52 +82,20 @@ class Blockchain(Community):
         use_localhost: bool = True,
     ) -> None:
         self._log("info", "Started!!")
-
         self.event = event
-        self.node_id = node_id
-        self.connections = connections
-        self.on_start_delay = random.uniform(1.0, 3.0)  # Seconds
-        host_network = self._get_lan_address()[0]
-        host_network_base = ".".join(host_network.split(".")[:3])
 
-        async def _ensure_nodes_connected() -> None:
-            for node_id, conn in connections:
-                ip_address = f"{host_network_base}.{node_id + 10}"
-                if use_localhost:
-                    ip_address = host_network
-                ad = (ip_address, conn)
-                self.walk_to(ad)
-            valid = False
-            conn_nodes = []
-
-            for node_id, node_port in self.connections:
-                conn_nodes = [p for p in self.get_peers() if p.address[1] == node_port]
-                if len(conn_nodes) == 0:
-                    return
-                valid = True
-                self.nodes[node_id] = conn_nodes[0]
-                self._log("info", f"Store {conn_nodes[0]} with {node_id}")
-            if not valid:
-                return
-            print(
-                f"Node {self.my_peer.mid.hex()[:6]} is fully connected to all nodes in the topology"
-            )
-            self.cancel_pending_task("ensure_nodes_connected")
-            print(f"[Node {self.node_id}] Starting")
-            self.register_anonymous_task(
-                "delayed_start", self.on_start, delay=self.on_start_delay
-            )
-
-        self.register_task(
-            "ensure_nodes_connected", _ensure_nodes_connected, interval=0.5, delay=1
-        )
+        if use_localhost:
+            await self.setup_localhost(node_id, connections)
+        else:
+            self._log("info", "Not using localhost")
+            self.on_start()
 
     def on_start(self):
         pass
 
     def stop(self, delay: int = 0):
         async def delayed_stop():
-            print(f"[Node {self.node_id}] Stopping algorithm")
+            self._log("info", "Stopping")
             self.event.set()
 
         self.register_anonymous_task("delayed_stop", delayed_stop, delay=delay)

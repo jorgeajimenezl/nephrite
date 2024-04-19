@@ -120,7 +120,7 @@ class NepheriteNode(Blockchain):
         self._log("info", "Start mining")
         try:
             self.is_mining = True
-            block = self.mine_block()           
+            block = self.mine_block()
             self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
             self._log("info", f"Block {block.header.seq_num} mined")
 
@@ -213,7 +213,7 @@ class NepheriteNode(Blockchain):
     @message_wrapper(Transaction)
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
         # TODO: remove this debug
-        peer_id = self.node_id_from_peer(peer)
+        peer_id = peer.mid.hex()[:6]
         self._log("info", f"Transaction from {peer_id} received")
 
         if self.mempool.get(transaction.sign) is not None:
@@ -280,7 +280,9 @@ class NepheriteNode(Blockchain):
 
     @message_wrapper(Block)
     def on_block(self, peer: Peer, block: Block) -> None:
-        self._log("info", f"Block {block.header.seq_num} received from {peer.mid.hex()[:6]}")
+        self._log(
+            "info", f"Block {block.header.seq_num} received from {peer.mid.hex()[:6]}"
+        )
 
         if not self.stateless_block_verification(block):
             self._log("warn", f"Block {block.header.seq_num} is invalid")
@@ -407,5 +409,5 @@ class NepheriteNode(Blockchain):
         block = self.build_block()
         blob = self.serializer.pack_serializable(block.header)
         answer = Puzzle.compute(blob)
-        block.header.nonce = answer        
+        block.header.nonce = answer
         return block
