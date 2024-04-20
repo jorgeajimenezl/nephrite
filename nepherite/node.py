@@ -117,7 +117,7 @@ class NepheriteNode(Blockchain):
             )
             cancellation = self.mining_cancellation.wait()
             _, pending = await asyncio.wait(
-                [mining, cancellation],
+                [mining, asyncio.ensure_future(cancellation)],
                 return_when=asyncio.FIRST_COMPLETED,
             )
             for pending_task in pending:
