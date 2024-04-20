@@ -15,6 +15,8 @@ from nepherite.puzzle import DIFFICULTY as BLOCK_DIFFICULTY
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import sha256
 
+import concurrent.futures
+
 BLOCK_SIZE = 4
 BLOCK_REWARD = 100
 RETRY_COUNT = 3
@@ -120,7 +122,12 @@ class NepheriteNode(Blockchain):
         self._log("info", "Start mining")
         try:
             self.is_mining = True
-            block = self.mine_block()
+            
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(self.mine_block_async)
+                block = future.result()
+            
+            # block = self.mine_block()
             self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
             self.current_block_hash = self.get_block_hash(block.header)
             self._log("info", f"Block {block.header.seq_num} mined")
@@ -133,6 +140,10 @@ class NepheriteNode(Blockchain):
             return
         finally:
             self.is_mining = False
+    
+    # todo: check this new
+    def mine_block_async(self):
+        return self.mine_block()
 
     def create_dummy_transaction(self):
         cnt = self.chainstate[self.my_peer.mid]
