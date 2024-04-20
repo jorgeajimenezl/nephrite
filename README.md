@@ -8,9 +8,11 @@ The Report for the weeks can be found in the following links:
 * [Week 1](docs/week_1_report.md)
 
 ## Application
+
 To Be Discussed
 
 ## Installation
+
 This repo is using Python 3.11.7 and Poetry to manage dependencies. To install the dependencies, run the following command:
 
 ```bash
@@ -19,16 +21,15 @@ poetry install
 ```
 
 ## Usage
+
 To run the program, execute the following command:
 
-
 ```bash
-python -m nepherite // more arguments to be added this is not working yet
+python -m nepherite
 ```
 
 ## TODO
-- [ ] Change the way that the block is serialized to not include the nonce on it.
-- [ ] At the time of block creation check the double spending on skip the failed transaction.
+
 - [ ] Add penalization system for the nodes that are not following the rules.
 
 ## Authors

@@ -1,0 +1,81 @@
+name: Test python package
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  Linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Poetry
+        uses: abatilo/actions-poetry@v3
+
+      - name: Install Python dependencies
+        run: poetry install
+
+      - name: Ruff linter check
+        id: ruff-linter
+        if: always()
+        run: poetry run ruff check --config pyproject.toml --output-format=github --exit-non-zero-on-fix nepherite/
+
+      - name: Ruff formatter check
+        id: ruff-formatter
+        if: always()
+        run: poetry run ruff format --config pyproject.toml --check nepherite/
+
+      - name: Bandit check
+        id: bandit
+        if: always()
+        run: poetry run bandit -c pyproject.toml -r aionyx_web_api/
+
+  Test:
+    name: Python tests
+    runs-on: ubuntu-latest
+    needs:
+      - Linting
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup Poetry
+        uses: abatilo/actions-poetry@v3
+
+      - name: Install Python dependencies
+        run: poetry install
+
+      - name: Run Python tests
+        run: poetry run coverage run -m pytest --junitxml=./test_results.xml
+        
+  Build:
+    name: Build container
+    runs-on: ubuntu-latest
+    needs: Test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build container
+        run: docker build . -t nepherite:dev
+    
