@@ -78,6 +78,7 @@ class NepheriteNode(Blockchain):
         # self.chainstate = Rdict("data/chainstate.db", options=options)
         self.chainstate: dict[bytes, int] = defaultdict(int)
         self.lock_mining = Lock()
+        self.mining_cancellation = asyncio.Event()
 
         self.seed_genesis_block()
 
@@ -107,21 +108,35 @@ class NepheriteNode(Blockchain):
         self.register_anonymous_task(
             "create_dummy_transaction", self.create_dummy_transaction, interval=5
         )
-        self.register_executor_task(
-            "start_to_create_block", self.start_to_create_block
-        )
+        self.register_anonymous_task("mining_monitor", self.mining_monitor)
 
-    def start_to_create_block(self):        
+    async def mining_monitor(self):
+        while True:
+            mining = self.register_executor_task(
+                "start_to_create_block", self.start_to_create_block
+            )
+            cancellation = self.mining_cancellation.wait()
+            _, pending = await asyncio.wait(
+                [mining, cancellation],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for pending_task in pending:
+                pending_task.cancel()
+
+            self._log("info", "Mining cancelled")
+            self.mining_cancellation.clear()
+
+    def start_to_create_block(self):
         while True:
             self._log("info", "Start mining")
             try:
                 block = self.mine_block()
-
                 with self.lock_mining:
-                    self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
+                    self.current_seq_num = max(
+                        self.current_seq_num, block.header.seq_num
+                    )
                     self.current_block_hash = self.get_block_hash(block.header)
                     self._log("info", f"Block {block.header.seq_num} mined")
-
                 for peer in self.get_peers():
                     self.ez_send(peer, block)
                     self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
@@ -333,6 +348,9 @@ class NepheriteNode(Blockchain):
                         self.invalid_blocks.add(block_path)
                         self.blockset.pop(block_path)
                 if flag:
+                    self._log("warn", "Cancelling mining")
+                    self.mining_cancellation.set()
+
                     # Apply the whole rollback
                     with self.lock_mining:
                         # Rollback transactions from mempool
