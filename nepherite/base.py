@@ -47,7 +47,9 @@ class Blockchain(Community, PeerObserver):
         if level == "error":
             logging.error(traceback.format_exc())
 
-    async def setup_localhost(self, node_id: int, connections: list[int], docker: bool = False):
+    async def setup_localhost(
+        self, node_id: int, connections: list[int], docker: bool = False
+    ):
         self._log("info", "Setting up localhost")
         self._log("info", f"Node ID: {node_id}")
 

@@ -124,27 +124,30 @@ class NepheriteNode(Blockchain):
             for pending_task in pending:
                 pending_task.cancel()
 
-            self._log("info", "Mining cancelled")
+            self._log("info", "Mining finished, waiting for next round")
             self.mining_cancellation.clear()
+            await asyncio.sleep(10.0)
 
     def start_to_create_block(self):
-        while True:
-            self._log("info", "Start mining")
-            try:
-                block = self.mine_block()
-                with self.lock_mining:
-                    self.current_seq_num = max(
-                        self.current_seq_num, block.header.seq_num
-                    )
-                    self.current_block_hash = self.get_block_hash(block.header)
-                    self._log("info", f"Block {block.header.seq_num} mined")
-                for peer in self.get_peers():
-                    self.ez_send(peer, block)
-                    self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
-            except Exception as e:
-                self._log("error", str(e))
-            finally:
-                time.sleep(5)
+        self._log("info", "Start mining")
+        try:
+            last_seq_num = self.current_seq_num
+            block = self.mine_block()
+
+            # TODO: remove this sh** (is ugly but works for now)
+            if last_seq_num != self.current_seq_num:
+                self._log("warn", "Block already mined")
+                return            
+            with self.lock_mining:
+                self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
+                self.current_block_hash = self.get_block_hash(block.header)
+                self.blockset[self.current_block_hash] = block
+                self._log("info", f"Block {block.header.seq_num} mined")
+            for peer in self.get_peers():
+                self.ez_send(peer, block)
+                self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
+        except Exception as e:
+            self._log("error", str(e))
 
     def create_dummy_transaction(self):
         cnt = self.chainstate[self.my_peer.mid]
@@ -307,7 +310,6 @@ class NepheriteNode(Blockchain):
         for near in self.get_peers():
             if near.mid == peer.mid:
                 continue
-
             self.ez_send(near, block)
             self._log("info", f"Block sent to {near.mid.hex()[:6]}")
 
@@ -316,44 +318,42 @@ class NepheriteNode(Blockchain):
             self.ez_send(peer, PullBlockRequest(block.header.prev_block_hash))
             return
         else:
-            if block.header.seq_num >= self.current_seq_num + K:
-                # TODO: implement chain reorganization
-                self._log("info", "Chain reorganization")
-                lca, deltas, path = self.rollback(block_hash)
+            with self.lock_mining:
+                if block.header.seq_num >= self.current_seq_num + K:
+                    # TODO: implement chain reorganization
+                    self._log("info", "Chain reorganization")
+                    lca, deltas, path = self.rollback(block_hash)
 
-                if lca is None:
-                    self._log("warn", "Failed to find LCA")
-                    self.ez_send(peer, PullBlockRequest(path[-1]))
-                    self._log("warn", "Requested last parent to solve LCA")
-                    return
+                    if lca is None:
+                        self._log("warn", "Failed to find LCA")
+                        self.ez_send(peer, PullBlockRequest(path[-1]))
+                        self._log("warn", "Requested last parent to solve LCA")
+                        return
 
-                flag = True
+                    valid_chain = True
+                    for block_path in path:
+                        if valid_chain:
+                            for tx in self.blockset[block_path].transactions:
+                                dt = self.get_transaction_deltas(tx)
+                                if all(
+                                    self.chainstate[addr] + value + deltas[addr] >= 0
+                                    for addr, value in dt.items()
+                                ):
+                                    self.apply_transaction(dt, deltas)
+                                else:
+                                    self._log("warn", "Invalid transaction")
+                                    # TODO: mark block as invalid
+                                    self.invalid_blocks.add(block_path)
+                                    self.blockset.pop(block_path)
+                                    valid_chain = False
+                                    break
+                        else:
+                            self.invalid_blocks.add(block_path)
+                            self.blockset.pop(block_path)
+                    if valid_chain:
+                        self._log("warn", "Cancelling mining")
+                        self.mining_cancellation.set()
 
-                for block_path in path:
-                    if flag:
-                        for tx in self.blockset[block_path].transactions:
-                            dt = self.get_transaction_deltas(tx)
-                            if all(
-                                self.chainstate[addr] + value + deltas[addr] >= 0
-                                for addr, value in dt.items()
-                            ):
-                                self.apply_transaction(dt, deltas)
-                            else:
-                                self._log("warn", "Invalid transaction")
-                                # TODO: mark block as invalid
-                                self.invalid_blocks.add(block_path)
-                                self.blockset.pop(block_path)
-                                flag = False
-                                break
-                    else:
-                        self.invalid_blocks.add(block_path)
-                        self.blockset.pop(block_path)
-                if flag:
-                    self._log("warn", "Cancelling mining")
-                    self.mining_cancellation.set()
-
-                    # Apply the whole rollback
-                    with self.lock_mining:
                         # Rollback transactions from mempool
                         ptr = self.current_block_hash
                         while lca != ptr:
