@@ -138,7 +138,7 @@ class NepheriteNode(Blockchain):
             # TODO: remove this sh** (is ugly but works for now)
             if last_seq_num != self.current_seq_num:
                 self._log("warn", "Block already mined")
-                return            
+                return
             with self.lock_mining:
                 self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
                 self.current_block_hash = self.get_block_hash(block.header)
