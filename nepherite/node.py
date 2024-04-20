@@ -111,6 +111,7 @@ class NepheriteNode(Blockchain):
         self.register_anonymous_task("mining_monitor", self.mining_monitor)
 
     async def mining_monitor(self):
+        self._log("info", "Mining monitor started")
         while True:
             mining = self.register_executor_task(
                 "start_to_create_block", self.start_to_create_block
