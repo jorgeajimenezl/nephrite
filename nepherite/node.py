@@ -77,7 +77,6 @@ class NepheriteNode(Blockchain):
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
         self.chainstate: dict[bytes, int] = defaultdict(int)
-        self.is_mining = False
         self.lock_mining = Lock()
 
         self.seed_genesis_block()
@@ -109,34 +108,27 @@ class NepheriteNode(Blockchain):
             "create_dummy_transaction", self.create_dummy_transaction, interval=5
         )
         self.register_executor_task(
-            "start_to_create_block", self.start_to_create_block, interval=3
+            "start_to_create_block", self.start_to_create_block
         )
 
-    def start_to_create_block(self):
-        self._log("info", "Start to create block")
+    def start_to_create_block(self):        
+        while True:
+            self._log("info", "Start mining")
+            try:
+                block = self.mine_block()
 
-        if self.is_mining:
-            self._log("warn", "Already mining")
-            return
+                with self.lock_mining:
+                    self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
+                    self.current_block_hash = self.get_block_hash(block.header)
+                    self._log("info", f"Block {block.header.seq_num} mined")
 
-        self._log("info", "Start mining")
-        try:
-            self.is_mining = True
-            block = self.mine_block()
-
-            with self.lock_mining:
-                self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
-                self.current_block_hash = self.get_block_hash(block.header)
-                self._log("info", f"Block {block.header.seq_num} mined")
-
-            for peer in self.get_peers():
-                self.ez_send(peer, block)
-                self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
-        except Exception as e:
-            self._log("error", str(e))
-            return
-        finally:
-            self.is_mining = False
+                for peer in self.get_peers():
+                    self.ez_send(peer, block)
+                    self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
+            except Exception as e:
+                self._log("error", str(e))
+            finally:
+                time.sleep(5)
 
     def create_dummy_transaction(self):
         cnt = self.chainstate[self.my_peer.mid]
