@@ -3,6 +3,7 @@ import os
 import random
 import time
 from collections import defaultdict
+from threading import Lock
 
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import dataclass
@@ -76,7 +77,8 @@ class NepheriteNode(Blockchain):
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
         self.chainstate: dict[bytes, int] = defaultdict(int)
-        self.is_mining = False
+        self.lock_mining = Lock()
+        self.mining_cancellation = asyncio.Event()
 
         self.seed_genesis_block()
 
@@ -106,33 +108,43 @@ class NepheriteNode(Blockchain):
         self.register_anonymous_task(
             "create_dummy_transaction", self.create_dummy_transaction, interval=5
         )
-        self.register_anonymous_task(
-            "start_to_create_block", self.start_to_create_block, interval=3
-        )
+        self.register_anonymous_task("mining_monitor", self.mining_monitor)
+
+    async def mining_monitor(self):
+        self._log("info", "Mining monitor started")
+        while True:
+            mining = self.register_executor_task(
+                "start_to_create_block", self.start_to_create_block
+            )
+            cancellation = self.mining_cancellation.wait()
+            _, pending = await asyncio.wait(
+                [mining, asyncio.ensure_future(cancellation)],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            for pending_task in pending:
+                pending_task.cancel()
+
+            self._log("info", "Mining cancelled")
+            self.mining_cancellation.clear()
 
     def start_to_create_block(self):
-        self._log("info", "Start to create block")
-
-        if self.is_mining:
-            self._log("warn", "Already mining")
-            return
-
-        self._log("info", "Start mining")
-        try:
-            self.is_mining = True
-            block = self.mine_block()
-            self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
-            self.current_block_hash = self.get_block_hash(block.header)
-            self._log("info", f"Block {block.header.seq_num} mined")
-
-            for peer in self.get_peers():
-                self.ez_send(peer, block)
-                self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
-        except Exception as e:
-            self._log("error", str(e))
-            return
-        finally:
-            self.is_mining = False
+        while True:
+            self._log("info", "Start mining")
+            try:
+                block = self.mine_block()
+                with self.lock_mining:
+                    self.current_seq_num = max(
+                        self.current_seq_num, block.header.seq_num
+                    )
+                    self.current_block_hash = self.get_block_hash(block.header)
+                    self._log("info", f"Block {block.header.seq_num} mined")
+                for peer in self.get_peers():
+                    self.ez_send(peer, block)
+                    self._log("info", f"Block sent to {peer.mid.hex()[:6]}")
+            except Exception as e:
+                self._log("error", str(e))
+            finally:
+                time.sleep(5)
 
     def create_dummy_transaction(self):
         cnt = self.chainstate[self.my_peer.mid]
@@ -337,27 +349,32 @@ class NepheriteNode(Blockchain):
                         self.invalid_blocks.add(block_path)
                         self.blockset.pop(block_path)
                 if flag:
-                    # Rollback transactions from mempool
-                    ptr = self.current_block_hash
-                    while lca != ptr:
-                        for tx in self.blockset[ptr].transactions:
-                            if tx.sign in self.mempool:
-                                self.mempool.pop(tx.sign)
-                        ptr = self.blockset[ptr].header.prev_block_hash
+                    self._log("warn", "Cancelling mining")
+                    self.mining_cancellation.set()
 
-                    # Fast forward transactions from mempool
-                    ptr = block_hash
-                    while ptr != lca:
-                        for tx in self.blockset[ptr].transactions:
-                            self.mempool[tx.sign] = tx
-                        ptr = self.blockset[ptr].header.prev_block_hash
+                    # Apply the whole rollback
+                    with self.lock_mining:
+                        # Rollback transactions from mempool
+                        ptr = self.current_block_hash
+                        while lca != ptr:
+                            for tx in self.blockset[ptr].transactions:
+                                if tx.sign in self.mempool:
+                                    self.mempool.pop(tx.sign)
+                            ptr = self.blockset[ptr].header.prev_block_hash
 
-                    self.current_block_hash = block_hash
-                    self.current_seq_num = block.header.seq_num
+                        # Fast forward transactions from mempool
+                        ptr = block_hash
+                        while ptr != lca:
+                            for tx in self.blockset[ptr].transactions:
+                                self.mempool[tx.sign] = tx
+                            ptr = self.blockset[ptr].header.prev_block_hash
 
-                    # Update chainstate (UTXOs)
-                    self.apply_transaction(deltas, self.chainstate)
-                    self._log("info", "Chain reorganization completed")
+                        self.current_block_hash = block_hash
+                        self.current_seq_num = block.header.seq_num
+
+                        # Update chainstate (UTXOs)
+                        self.apply_transaction(deltas, self.chainstate)
+                        self._log("info", "Chain reorganization completed")
 
     def build_coinbase_transaction(self) -> Transaction:
         output = [TxOut(self.my_peer.mid, BLOCK_REWARD)]
@@ -396,7 +413,8 @@ class NepheriteNode(Blockchain):
     def build_block(self) -> Block:
         transactions = [self.build_coinbase_transaction()]
         # Include transactions from mempool
-        transactions += self.build_valid_transactions_for_block()
+        with self.lock_mining:
+            transactions += self.build_valid_transactions_for_block()
         tree = MerkleTree([tx.sign for tx in transactions])
 
         header = BlockHeader(
