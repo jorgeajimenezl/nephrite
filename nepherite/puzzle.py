@@ -2,7 +2,7 @@ from typing import Generic, TypeVar
 
 from nepherite.utils import sha256
 
-DIFFICULTY = 3
+DIFFICULTY = 2
 Answer = TypeVar("Answer")
 
 

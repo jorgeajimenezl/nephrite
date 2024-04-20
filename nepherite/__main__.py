@@ -1,12 +1,18 @@
 import argparse
+import asyncio
 import os
-from asyncio import run
 
 import yaml
-from ipv8.configuration import ConfigBuilder, default_bootstrap_defs
+from ipv8.configuration import (
+    ConfigBuilder,
+    Strategy,
+    WalkerDefinition,
+    default_bootstrap_defs,
+)
 from ipv8.util import create_event_with_signals
 from ipv8_service import IPv8
 
+from nepherite.base import BASE_PORT
 from nepherite.node import NepheriteNode
 
 
@@ -16,19 +22,22 @@ async def start_communities(
     use_localhost: bool = True,
 ) -> None:
     event = create_event_with_signals()
-    base_port = 9090
-    connections_updated = [(x, base_port + x) for x in connections]
-    node_port = base_port + node_id
+
     builder = ConfigBuilder().clear_keys().clear_overlays()
     builder.add_key("nepherite-peer", "medium", f"data/keys/ec{node_id}.pem")
-    builder.set_port(node_port)
+    if use_localhost:
+        builder.set_port(BASE_PORT)
     builder.add_overlay(
         "blockchain_community",
         "nepherite-peer",
-        [],
+        (
+            []
+            if use_localhost
+            else [WalkerDefinition(Strategy.RandomWalk, 10, {"timeout": 3.0})]
+        ),
         default_bootstrap_defs,
         {},
-        [("started", node_id, connections_updated, event, use_localhost)],
+        [("started", node_id, connections, event, use_localhost)],
     )
     ipv8_instance = IPv8(
         builder.finalize(), extra_communities={"blockchain_community": NepheriteNode}
@@ -39,28 +48,33 @@ async def start_communities(
 
 
 if __name__ == "__main__":
-    if not os.path.isdir("data"):
-        os.mkdir("data")
-    if not os.path.isdir("data/keys"):
-        os.mkdir("data/keys")
-    if not os.path.isdir("data/blocks"):
-        os.mkdir("data/blocks")
+    # Ensure the data directory exists
+    os.makedirs("data/keys", exist_ok=True)
+    os.makedirs("data/blocks", exist_ok=True)
 
     parser = argparse.ArgumentParser(
         prog="Blockchain",
         description="Code to execute blockchain.",
         epilog="Designed for A27 Fundamentals and Design of Blockchain-based Systems",
     )
-    parser.add_argument("node_id", type=int)
     parser.add_argument(
-        "topology", type=str, nargs="?", default="../tests/topologies/default.yaml"
+        "--node_id",
+        type=int,
+        default=-1,
+        help="Node ID to use in the topology on localhost",
     )
-    parser.add_argument("--docker", action="store_true")
+    parser.add_argument(
+        "--topology", type=str, nargs="?", default="../tests/topologies/default.yaml"
+    )
+    parser.add_argument("--local", action="store_true")
     args = parser.parse_args()
+
     node_id = args.node_id
+    if args.local:
+        with open(args.topology) as f:
+            topology = yaml.safe_load(f)
+            connections = topology[node_id]
+    else:
+        connections = []
 
-    with open(args.topology) as f:
-        topology = yaml.safe_load(f)
-        connections = topology[node_id]
-
-        run(start_communities(node_id, connections, not args.docker))
+    asyncio.run(start_communities(node_id, connections, args.local))

@@ -11,12 +11,12 @@ from ipv8.types import Peer
 # from rocksdict import Options, Rdict
 from nepherite.base import Blockchain, message_wrapper
 from nepherite.merkle import MerkleTree
+from nepherite.puzzle import DIFFICULTY as BLOCK_DIFFICULTY
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import sha256
 
 BLOCK_SIZE = 4
 BLOCK_REWARD = 100
-BLOCK_DIFFICULTY = 6
 RETRY_COUNT = 3
 K = 2
 
@@ -120,8 +120,9 @@ class NepheriteNode(Blockchain):
         self._log("info", "Start mining")
         try:
             self.is_mining = True
-            block = self.mine_block()           
+            block = self.mine_block()
             self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
+            self.current_block_hash = self.get_block_hash(block.header)
             self._log("info", f"Block {block.header.seq_num} mined")
 
             for peer in self.get_peers():
@@ -213,7 +214,7 @@ class NepheriteNode(Blockchain):
     @message_wrapper(Transaction)
     def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
         # TODO: remove this debug
-        peer_id = self.node_id_from_peer(peer)
+        peer_id = peer.mid.hex()[:6]
         self._log("info", f"Transaction from {peer_id} received")
 
         if self.mempool.get(transaction.sign) is not None:
@@ -231,14 +232,16 @@ class NepheriteNode(Blockchain):
 
     @message_wrapper(PullBlockRequest)
     def on_pull_block_request(self, peer: Peer, request: PullBlockRequest) -> None:
+        self._log("info", f"Pull Request received from {peer.mid.hex()[:6]}")
         block_hash = request.block_hash
         if block_hash not in self.blockset:
-            self._log("warn", "Block is not in the chain")
+            self._log("warn", "Block is not in the my chain")
             for near in self.get_peers():
                 if near.mid == peer.mid:
                     continue
                 self.ez_send(near, PullBlockRequest(block_hash))
             return
+        self._log("info", "Block sent")
         self.ez_send(peer, self.blockset[block_hash])
 
     def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
@@ -257,30 +260,29 @@ class NepheriteNode(Blockchain):
     def rollback(self, v: bytes) -> bytes:
         u = self.current_block_hash
         path = []
-
-        while self.blockset[u].seq_num < self.blockset[v].seq_num:
+        while self.blockset[u].header.seq_num < self.blockset[v].header.seq_num:
             path.append(v)
-            v = self.blockset[v].prev_block_hash
+            v = self.blockset[v].header.prev_block_hash
             if v not in self.blockset:
-                return None, {}, []
-
-        deltas = {}
+                return None, {}, path
+        deltas = defaultdict(int)
         while u != v:
             for tx in self.blockset[u].transactions:
                 dt = self.get_transaction_deltas(tx)
                 self.apply_transaction(dt, deltas, -1)
 
             path.append(v)
-            u = self.blockset[u].prev_block_hash
-            v = self.blockset[v].prev_block_hash
+            u = self.blockset[u].header.prev_block_hash
+            v = self.blockset[v].header.prev_block_hash
             if u not in self.blockset or v not in self.blockset:
-                return None, {}, []
-
+                return None, {}, path
         return u, deltas, path
 
     @message_wrapper(Block)
     def on_block(self, peer: Peer, block: Block) -> None:
-        self._log("info", f"Block {block.header.seq_num} received from {peer.mid.hex()[:6]}")
+        self._log(
+            "info", f"Block {block.header.seq_num} received from {peer.mid.hex()[:6]}"
+        )
 
         if not self.stateless_block_verification(block):
             self._log("warn", f"Block {block.header.seq_num} is invalid")
@@ -309,9 +311,12 @@ class NepheriteNode(Blockchain):
 
                 if lca is None:
                     self._log("warn", "Failed to find LCA")
+                    self.ez_send(peer, PullBlockRequest(path[-1]))
+                    self._log("warn", "Requested last parent to solve LCA")
                     return
 
                 flag = True
+
                 for block_path in path:
                     if flag:
                         for tx in self.blockset[block_path].transactions:
@@ -338,20 +343,21 @@ class NepheriteNode(Blockchain):
                         for tx in self.blockset[ptr].transactions:
                             if tx.sign in self.mempool:
                                 self.mempool.pop(tx.sign)
-                        ptr = self.blockset[ptr].prev_block_hash
+                        ptr = self.blockset[ptr].header.prev_block_hash
 
                     # Fast forward transactions from mempool
                     ptr = block_hash
                     while ptr != lca:
                         for tx in self.blockset[ptr].transactions:
                             self.mempool[tx.sign] = tx
-                        ptr = self.blockset[ptr].prev_block_hash
+                        ptr = self.blockset[ptr].header.prev_block_hash
 
                     self.current_block_hash = block_hash
                     self.current_seq_num = block.header.seq_num
 
                     # Update chainstate (UTXOs)
                     self.apply_transaction(deltas, self.chainstate)
+                    self._log("info", "Chain reorganization completed")
 
     def build_coinbase_transaction(self) -> Transaction:
         output = [TxOut(self.my_peer.mid, BLOCK_REWARD)]
@@ -407,5 +413,5 @@ class NepheriteNode(Blockchain):
         block = self.build_block()
         blob = self.serializer.pack_serializable(block.header)
         answer = Puzzle.compute(blob)
-        block.header.nonce = answer        
+        block.header.nonce = answer
         return block

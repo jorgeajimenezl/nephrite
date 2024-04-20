@@ -12,7 +12,7 @@ class PuzzleTests(TestCase):
         data = b"hello"
         answer = HashNoncePuzzle.compute(data)
         self.assertTrue(HashNoncePuzzle.verify(data, answer))
-        
+
         # Test verification
-        hash = sha256(data, answer.to_bytes(4))
-        self.assertTrue(all(hash[i] == 0 for i in range(DIFFICULTY)))
+        data_hash = sha256(data, answer.to_bytes(4))
+        self.assertTrue(all(data_hash[i] == 0 for i in range(DIFFICULTY)))
