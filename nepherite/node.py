@@ -260,13 +260,11 @@ class NepheriteNode(Blockchain):
     def rollback(self, v: bytes) -> bytes:
         u = self.current_block_hash
         path = []
-
         while self.blockset[u].header.seq_num < self.blockset[v].header.seq_num:
             path.append(v)
             v = self.blockset[v].header.prev_block_hash
             if v not in self.blockset:
-                return None, {}, []
-
+                return None, {}, path
         deltas = defaultdict(int)
         while u != v:
             for tx in self.blockset[u].transactions:
@@ -277,8 +275,7 @@ class NepheriteNode(Blockchain):
             u = self.blockset[u].header.prev_block_hash
             v = self.blockset[v].header.prev_block_hash
             if u not in self.blockset or v not in self.blockset:
-                return None, {}, []
-
+                return None, {}, path
         return u, deltas, path
 
     @message_wrapper(Block)
@@ -314,9 +311,12 @@ class NepheriteNode(Blockchain):
 
                 if lca is None:
                     self._log("warn", "Failed to find LCA")
+                    self.ez_send(peer, PullBlockRequest(path[-1]))
+                    self._log("warn", "Requested last parent to solve LCA")
                     return
 
                 flag = True
+
                 for block_path in path:
                     if flag:
                         for tx in self.blockset[block_path].transactions:
