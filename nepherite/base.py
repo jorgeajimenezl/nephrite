@@ -47,17 +47,18 @@ class Blockchain(Community, PeerObserver):
         if level == "error":
             logging.error(traceback.format_exc())
 
-    async def setup_localhost(self, node_id: int, connections: list[int]):
+    async def setup_localhost(self, node_id: int, connections: list[int], docker: bool = False):
         self._log("info", "Setting up localhost")
         self._log("info", f"Node ID: {node_id}")
 
         connections: list[tuple[str, int]] = [(x, BASE_PORT + x) for x in connections]
         host_network, *_ = self._get_lan_address()
+        host_network_base = ".".join(host_network.split(".")[:3])
 
         async def _ensure_nodes_connected() -> None:
-            for _, port in connections:
-                addr = (host_network, port)
-                self.walk_to(addr)
+            for i, port in connections:
+                hostname = f"{host_network_base}.{i + 10}" if docker else host_network
+                self.walk_to((hostname, port))
             valid = False
             conn_nodes = []
 
@@ -87,13 +88,14 @@ class Blockchain(Community, PeerObserver):
         connections: list[tuple[int, int]],
         event: Event,
         use_localhost: bool = True,
+        docker: bool = False,
     ) -> None:
         self._log("info", "Started!!")
         self.event = event
         self.network.add_peer_observer(self)
 
         if use_localhost:
-            await self.setup_localhost(node_id, connections)
+            await self.setup_localhost(node_id, connections, docker=docker)
         else:
             self._log("info", "Not using localhost")
             self.on_start()

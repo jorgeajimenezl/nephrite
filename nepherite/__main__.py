@@ -20,13 +20,14 @@ async def start_communities(
     node_id: int,
     connections: list[int],
     use_localhost: bool = True,
+    docker: bool = False,
 ) -> None:
     event = create_event_with_signals()
 
     builder = ConfigBuilder().clear_keys().clear_overlays()
     builder.add_key("nepherite-peer", "medium", f"data/keys/ec{node_id}.pem")
     if use_localhost:
-        builder.set_port(BASE_PORT)
+        builder.set_port(BASE_PORT + node_id)
     builder.add_overlay(
         "blockchain_community",
         "nepherite-peer",
@@ -37,7 +38,7 @@ async def start_communities(
         ),
         default_bootstrap_defs,
         {},
-        [("started", node_id, connections, event, use_localhost)],
+        [("started", node_id, connections, event, use_localhost, docker)],
     )
     ipv8_instance = IPv8(
         builder.finalize(), extra_communities={"blockchain_community": NepheriteNode}
@@ -67,6 +68,7 @@ if __name__ == "__main__":
         "--topology", type=str, nargs="?", default="../tests/topologies/default.yaml"
     )
     parser.add_argument("--local", action="store_true")
+    parser.add_argument("--docker", action="store_true")
     args = parser.parse_args()
 
     node_id = args.node_id
@@ -77,4 +79,4 @@ if __name__ == "__main__":
     else:
         connections = []
 
-    asyncio.run(start_communities(node_id, connections, args.local))
+    asyncio.run(start_communities(node_id, connections, args.local, args.docker))

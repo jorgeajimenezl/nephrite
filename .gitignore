@@ -14,12 +14,12 @@ test*mj.py
 # Keys
 *.pem
 
-
 # C extensions
 *.so
 .idea
+
 # Deployment files
-docker-compose.yml
+tests/deploy/
 
 # Distribution / packaging
 .Python

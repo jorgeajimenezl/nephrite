@@ -1,0 +1,26 @@
+x-common-variables: &common-variables
+  TOPOLOGY: {{ topology_path }}
+  EMPTY: null
+
+services:
+  {% for i in range(num_nodes) %}
+  node{{ i }}:
+    build: ../../
+    command: 'python -m nepherite --node_id {{ i }} --topology tests/{{ topology_path }} --local --docker'
+    ports:
+      - '{{ 9090 + i }}:9090'
+    environment:
+      PID: {{ i }}
+      << : *common-variables
+    networks:
+      vpcbr:
+        ipv4_address: 192.168.55.{{ 10 + i }}
+  {% endfor %}
+networks:
+  vpcbr:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.55.0/24
+          gateway: 192.168.55.1
