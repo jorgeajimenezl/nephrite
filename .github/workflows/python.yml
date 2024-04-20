@@ -38,7 +38,7 @@ jobs:
       - name: Bandit check
         id: bandit
         if: always()
-        run: poetry run bandit -c pyproject.toml -r aionyx_web_api/
+        run: poetry run bandit -c pyproject.toml -r nepherite/
 
   Test:
     name: Python tests
