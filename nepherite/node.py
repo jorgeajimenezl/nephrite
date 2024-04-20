@@ -11,15 +11,16 @@ from ipv8.types import Peer
 
 # from rocksdict import Options, Rdict
 from nepherite.base import Blockchain, message_wrapper
+from nepherite.config import (
+    BLOCK_REWARD,
+    BLOCK_SIZE,
+    BLOCK_TTL,
+    CHAIN_GAP_SIZE,
+)
 from nepherite.merkle import MerkleTree
 from nepherite.puzzle import DIFFICULTY as BLOCK_DIFFICULTY
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import sha256
-
-BLOCK_SIZE = 4
-BLOCK_REWARD = 100
-RETRY_COUNT = 3
-K = 2
 
 
 @dataclass
@@ -72,7 +73,7 @@ class NepheriteNode(Blockchain):
         self.invalid_blocks: set[bytes] = set()
         self.current_seq_num = 0
         self.current_block_hash = b"\x00" * 32
-        self.events: dict[int, asyncio.Event] = {}
+        self.ttl: dict[bytes, int] = defaultdict(lambda: BLOCK_TTL)
 
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
@@ -303,23 +304,25 @@ class NepheriteNode(Blockchain):
             self._log("warn", f"Block {block.header.seq_num} is invalid")
             return
 
-        # self.blocks[block.seq_num].append(block)
         block_hash = self.get_block_hash(block.header)
         self.blockset[block_hash] = block
+        self.ttl[block_hash] = max(self.ttl[block_hash] - 1, 0)
 
-        for near in self.get_peers():
-            if near.mid == peer.mid:
-                continue
-            self.ez_send(near, block)
-            self._log("info", f"Block sent to {near.mid.hex()[:6]}")
+        if self.ttl[block_hash] > 0:
+            # Broadcast block to other peers
+            for near in self.get_peers():
+                if near.mid == peer.mid:
+                    continue
+                self.ez_send(near, block)
+                self._log("info", f"Block sent to {near.mid.hex()[:6]}")
 
         if block.header.prev_block_hash not in self.blockset:
             self._log("warn", "Block is not in the chain")
             self.ez_send(peer, PullBlockRequest(block.header.prev_block_hash))
             return
         else:
-            with self.lock_mining:
-                if block.header.seq_num >= self.current_seq_num + K:
+            if block.header.seq_num >= self.current_seq_num + CHAIN_GAP_SIZE:
+                with self.lock_mining:
                     # TODO: implement chain reorganization
                     self._log("info", "Chain reorganization")
                     lca, deltas, path = self.rollback(block_hash)
