@@ -1,9 +1,14 @@
 import argparse
-import copy
 
-import yaml
+from jinja2 import Environment, PackageLoader, select_autoescape
 
-if __name__ == "__main__":
+env = Environment(
+    loader=PackageLoader("tests", package_path="."),
+    autoescape=select_autoescape(),
+)
+
+
+def main():
     parser = argparse.ArgumentParser(
         prog="Scale the docker-compose file",
         description="Scale the number of nodes",
@@ -11,40 +16,22 @@ if __name__ == "__main__":
     )
     parser.add_argument("num_nodes", type=int)
     parser.add_argument(
-        "topology_file", type=str, nargs="?", default="topologies/ring.yaml"
+        "template_file", type=str, nargs="?", default="docker-compose-template.yml"
     )
     parser.add_argument(
-        "template_file", type=str, nargs="?", default="docker-compose.template.yml"
+        "topology_file", type=str, nargs="?", default="topologies/ring.yaml"
     )
+
     args = parser.parse_args()
+    template = env.get_template(args.template_file)
 
-    with open(args.template_file) as f:
-        content = yaml.safe_load(f)
+    with open("deploy/docker-compose.yml", "w") as f:
+        content = template.render(
+            num_nodes=args.num_nodes, topology_path=args.topology_file
+        )
+        f.write(content)
+        print("Output written to docker-compose.yml")
 
-        node = content["services"]["node0"]
-        content["x-common-variables"]["TOPOLOGY"] = args.topology_file
 
-        nodes = {}
-        baseport = 9090
-        connections = {}
-
-        # Create a ring topology
-        for i in range(args.num_nodes):
-            n = copy.deepcopy(node)
-            n["ports"] = [f"{baseport + i}:{baseport + i}"]
-            n["networks"]["vpcbr"]["ipv4_address"] = f"192.168.55.{10 + i}"
-            n["environment"]["PID"] = i
-            n["environment"]["TOPOLOGY"] = args.topology_file
-            nodes[f"node{i}"] = n
-
-            connections[i] = [j for j in range(args.num_nodes) if j != i]
-
-        content["services"] = nodes
-
-        with open("docker-compose.yml", "w") as f2:
-            yaml.safe_dump(content, f2)
-            print("Output written to docker-compose.yml")
-
-        with open(args.topology_file, "w") as f3:
-            yaml.safe_dump(connections, f3)
-            print(f"Output written to {args.topology_file}")
+if __name__ == "__main__":
+    main()
