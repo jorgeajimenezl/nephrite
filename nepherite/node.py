@@ -155,7 +155,7 @@ class NepheriteNode(Blockchain):
         if cnt < 10:
             return
 
-        peer = random.choice(self.get_peers()) # noqa: B311
+        peer = random.choice(self.get_peers()) #  # nosec B311
         out = [TxOut(peer.mid, min(cnt, 10))]
 
         for peer in self.get_peers():
