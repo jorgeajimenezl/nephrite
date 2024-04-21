@@ -14,7 +14,7 @@ from nepherite.node import (
 )
 
 
-class NepheriteNodeTests(TestBase):
+class NepheriteNodeTests(TestBase[NepheriteNode]):
     def setUp(self) -> None:
         super().setUp()
 
