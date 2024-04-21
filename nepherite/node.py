@@ -185,7 +185,7 @@ class NepheriteNode(Blockchain):
         peer = random.choice(self.get_peers())  # nosec B311
         out = [TxOut(peer.mid, min(cnt, 10))]
         tx = self.make_and_sign_transaction(out)
-        self.mempool[tx.sign] = tx # add to mempool
+        self.mempool[tx.sign] = tx  # add to mempool
 
         for peer in self.get_peers():
             if peer.mid != self.my_peer.mid:
@@ -256,8 +256,8 @@ class NepheriteNode(Blockchain):
         if not self.verify_sign_transaction(transaction):
             self._log("warn", f"Transaction from {peer_id} has an invalid signature")
             return
-        
-        self._log("info", f"Transaction from {peer_id} is valid signed")        
+
+        self._log("info", f"Transaction from {peer_id} is valid signed")
         self.mempool[transaction.sign] = transaction
         for u in self.get_peers():
             if u.mid != peer.mid:
@@ -278,7 +278,9 @@ class NepheriteNode(Blockchain):
         self.ttl[block_hash] = min(self.ttl[block_hash] + 1, 2)
         self.ez_send(peer, self.blockset[block_hash])
 
-    def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
+    def get_transaction_deltas(
+        self, transaction: Transaction, coinbase: bool = False
+    ) -> dict[bytes, int]:
         deltas = defaultdict(int)
         out = 0
         for utxo in transaction.payload.output:
@@ -286,9 +288,10 @@ class NepheriteNode(Blockchain):
             amount = utxo.amount
             deltas[addr] += amount
             out += amount
-        pk = self.crypto.key_from_public_bin(transaction.pk)
-        addr = pk.key_to_hash()
-        deltas[addr] -= out
+        if not coinbase:
+            pk = self.crypto.key_from_public_bin(transaction.pk)
+            addr = pk.key_to_hash()
+            deltas[addr] -= out
         return deltas
 
     def rollback(self, v: bytes) -> bytes:
@@ -301,8 +304,16 @@ class NepheriteNode(Blockchain):
                 return None, {}, path
         deltas = defaultdict(int)
         while u != v:
-            for tx in self.blockset[u].transactions:
-                dt = self.get_transaction_deltas(tx)
+            # undo coinbase transaction
+            self.apply_transaction(
+                self.get_transaction_deltas(
+                    self.blockset[u].transactions[0], coinbase=True
+                ),
+                deltas,
+                -1,
+            )
+            for tx in self.blockset[u].transactions[1:]:
+                dt = self.get_transaction_deltas(tx, coinbase=False)
                 self.apply_transaction(dt, deltas, -1)
 
             path.append(v)
@@ -355,8 +366,17 @@ class NepheriteNode(Blockchain):
                     valid_chain = True
                     for in_block in path:
                         if valid_chain:
-                            for tx in self.blockset[in_block].transactions:
-                                dt = self.get_transaction_deltas(tx)
+                            # undo coinbase transaction
+                            self.apply_transaction(
+                                self.get_transaction_deltas(
+                                    self.blockset[in_block].transactions[0],
+                                    coinbase=True,
+                                ),
+                                deltas,
+                            )
+
+                            for tx in self.blockset[in_block].transactions[1:]:
+                                dt = self.get_transaction_deltas(tx, coinbase=False)
                                 if all(
                                     self.chainstate[addr] + value + deltas[addr] >= 0
                                     for addr, value in dt.items()
@@ -417,7 +437,7 @@ class NepheriteNode(Blockchain):
         for tx in self.mempool.values():
             if len(valid_transactions) >= BLOCK_SIZE - 1:
                 break
-            dt = self.get_transaction_deltas(tx)
+            dt = self.get_transaction_deltas(tx, coinbase=False)
             if all(
                 self.chainstate[addr] + value + deltas[addr] >= 0
                 for addr, value in dt.items()
