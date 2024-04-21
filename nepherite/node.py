@@ -63,6 +63,9 @@ class PullBlockRequest:
     block_hash: bytes
 
 
+LocalBlockOperation = tuple[Block, list[Transaction], dict[bytes, int]]
+
+
 class NepheriteNode(Blockchain):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
@@ -77,7 +80,7 @@ class NepheriteNode(Blockchain):
 
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
-        self.chainstate: dict[bytes, int] = defaultdict(int)
+        self.chainstate: defaultdict[bytes, int] = defaultdict(int)
         self.lock_mining = Lock()
         self.mining_cancellation = asyncio.Event()
 
@@ -86,6 +89,8 @@ class NepheriteNode(Blockchain):
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(Block, self.on_block)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
+
+        self._last_seq_num_for_tx = -1
 
     def seed_genesis_block(self):
         genesis_block = Block(
@@ -110,6 +115,15 @@ class NepheriteNode(Blockchain):
             "create_dummy_transaction", self.create_dummy_transaction, interval=5
         )
         self.register_anonymous_task("mining_monitor", self.mining_monitor)
+        self.register_anonymous_task("report", self.report, interval=10)
+
+    def report(self):
+        self._log("info", f"Current block: {self.current_seq_num}")
+        self._log("info", f"Current hash: {self.current_block_hash.hex()[:6]}")
+        self._log(
+            "info",
+            f"Current chainstate: {[f'{k.hex()[:6]}: {v}' for k, v in self.chainstate.items()]}",
+        )
 
     async def mining_monitor(self):
         self._log("info", "Mining monitor started")
@@ -133,16 +147,26 @@ class NepheriteNode(Blockchain):
         self._log("info", "Start mining")
         try:
             last_seq_num = self.current_seq_num
-            block = self.mine_block()
+            operation = self.build_and_mine_block()
 
             # TODO: remove this sh** (is ugly but works for now)
             if last_seq_num != self.current_seq_num:
                 self._log("warn", "Block already mined")
                 return
+
+            # Commit block changes
             with self.lock_mining:
+                block, tx_to_remove, deltas = operation
                 self.current_seq_num = max(self.current_seq_num, block.header.seq_num)
                 self.current_block_hash = self.get_block_hash(block.header)
                 self.blockset[self.current_block_hash] = block
+
+                # Apply deltas to chainstate
+                self.apply_transaction(deltas, self.chainstate)
+                # Remove transactions from mempool
+                for tx in tx_to_remove:
+                    self.mempool.pop(tx.sign)
+
                 self._log("info", f"Block {block.header.seq_num} mined")
             for peer in self.get_peers():
                 self.ez_send(peer, block)
@@ -151,18 +175,22 @@ class NepheriteNode(Blockchain):
             self._log("error", str(e))
 
     def create_dummy_transaction(self):
+        if self._last_seq_num_for_tx == self.current_seq_num:
+            return
+        self._last_seq_num_for_tx = self.current_seq_num
         cnt = self.chainstate[self.my_peer.mid]
         if cnt < 10:
             return
 
         peer = random.choice(self.get_peers())  # nosec B311
         out = [TxOut(peer.mid, min(cnt, 10))]
+        tx = self.make_and_sign_transaction(out)
+        self.mempool[tx.sign] = tx # add to mempool
 
         for peer in self.get_peers():
             if peer.mid != self.my_peer.mid:
-                tx = self.make_and_sign_transaction(out)
                 self.ez_send(peer, tx)
-                self._log("debug", f"Sent tx to {peer.mid.hex()[:6]}")
+                self._log("debug", f"Sent tx with {cnt} coins to {peer.mid.hex()[:6]}")
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)
@@ -189,36 +217,25 @@ class NepheriteNode(Blockchain):
         pk = self.my_peer.key.pub().key_to_bin()
         return Transaction(payload, pk, sign)
 
-    def verify_transaction(
+    def verify_sign_transaction(
         self, transaction: Transaction, coinbase: bool = False
     ) -> bool:
         pk = self.crypto.key_from_public_bin(transaction.pk)
-        addr = pk.key_to_hash()
         blob = self.serializer.pack_serializable(transaction.payload)
         if not self.crypto.is_valid_signature(pk, blob, transaction.sign):
             return False
-        sum = 0  # noqa: A001
-        for utxo in transaction.payload.output:
-            sum += utxo.amount  # noqa: A001
-        if coinbase:
-            return sum == BLOCK_REWARD
-        amount = self.chainstate[addr]
-        return amount >= sum
+        return True
 
     def stateless_block_verification(self, block: Block) -> bool:
         header = block.header
 
         # TODO: remove this sh** (is ugly but works for now)
-        nonce = block.header.nonce
-        block.header.nonce = 0
-
-        blob = self.serializer.pack_serializable(header)
-
         # 1. Check the proof of work (nonce + previous hash = answer)
-        if not Puzzle.verify(blob, nonce):
+        nonce = block.header.nonce
+        block.header.nonce = 0  # remove nonce
+        if not Puzzle.verify(self.get_block_hash(block.header), nonce):
             return False
-
-        block.header.nonce = nonce
+        block.header.nonce = nonce  # rollback
 
         # 2. Check the merkle root hash
         tree = MerkleTree([tx.sign for tx in block.transactions])
@@ -236,11 +253,11 @@ class NepheriteNode(Blockchain):
         if self.mempool.get(transaction.sign) is not None:
             self._log("info", f"Transaction from {peer_id} is already in mempool")
             return
-        if not self.verify_transaction(transaction):
-            self._log("warn", f"Transaction from {peer_id} is invalid")
+        if not self.verify_sign_transaction(transaction):
+            self._log("warn", f"Transaction from {peer_id} has an invalid signature")
             return
-
-        self._log("info", f"Transaction from {peer_id} is valid")
+        
+        self._log("info", f"Transaction from {peer_id} is valid signed")        
         self.mempool[transaction.sign] = transaction
         for u in self.get_peers():
             if u.mid != peer.mid:
@@ -258,6 +275,7 @@ class NepheriteNode(Blockchain):
                 self.ez_send(near, PullBlockRequest(block_hash))
             return
         self._log("info", "Block sent")
+        self.ttl[block_hash] = min(self.ttl[block_hash] + 1, 2)
         self.ez_send(peer, self.blockset[block_hash])
 
     def get_transaction_deltas(self, transaction: Transaction) -> dict[bytes, int]:
@@ -329,14 +347,15 @@ class NepheriteNode(Blockchain):
 
                     if lca is None:
                         self._log("warn", "Failed to find LCA")
+
                         self.ez_send(peer, PullBlockRequest(path[-1]))
-                        self._log("warn", "Requested last parent to solve LCA")
+                        self._log("info", "Requested last parent to find LCA")
                         return
 
                     valid_chain = True
-                    for block_path in path:
+                    for in_block in path:
                         if valid_chain:
-                            for tx in self.blockset[block_path].transactions:
+                            for tx in self.blockset[in_block].transactions:
                                 dt = self.get_transaction_deltas(tx)
                                 if all(
                                     self.chainstate[addr] + value + deltas[addr] >= 0
@@ -346,13 +365,13 @@ class NepheriteNode(Blockchain):
                                 else:
                                     self._log("warn", "Invalid transaction")
                                     # TODO: mark block as invalid
-                                    self.invalid_blocks.add(block_path)
-                                    self.blockset.pop(block_path)
+                                    self.invalid_blocks.add(in_block)
+                                    self.blockset.pop(in_block)
                                     valid_chain = False
                                     break
                         else:
-                            self.invalid_blocks.add(block_path)
-                            self.blockset.pop(block_path)
+                            self.invalid_blocks.add(in_block)
+                            self.blockset.pop(in_block)
                     if valid_chain:
                         self._log("warn", "Cancelling mining")
                         self.mining_cancellation.set()
@@ -389,37 +408,34 @@ class NepheriteNode(Blockchain):
         for address, value in deltas.items():
             chain_state[address] += value * sign
 
-    def build_valid_transactions_for_block(self) -> list[Transaction]:
-        """
-        Get valid transactions from mempool
-        Delete invalid transactions from mempool while iterating
-        Returns:
-            list[Transaction]: List of valid transactions for the next block
-        """
+    def build_valid_transactions_for_block(
+        self,
+    ) -> tuple[list[Transaction], list[Transaction], defaultdict[bytes, int]]:
         valid_transactions = []
-        deleted_transactions = []
+        tx_to_remove = []
+        deltas = defaultdict(int)
         for tx in self.mempool.values():
             if len(valid_transactions) >= BLOCK_SIZE - 1:
                 break
-            deltas = self.get_transaction_deltas(tx)
+            dt = self.get_transaction_deltas(tx)
             if all(
-                self.chainstate[address] + value >= 0
-                for address, value in deltas.items()
+                self.chainstate[addr] + value + deltas[addr] >= 0
+                for addr, value in dt.items()
             ):
                 valid_transactions.append(tx)
-                self.apply_transaction(deltas, self.chainstate)
-            deleted_transactions.append(tx)
-        for tx in deleted_transactions:
-            self.mempool.pop(tx.sign)
-        return valid_transactions
+                self.apply_transaction(dt, deltas)
+            tx_to_remove.append(tx)
+        return valid_transactions, tx_to_remove, deltas
 
-    def build_block(self) -> Block:
-        transactions = [self.build_coinbase_transaction()]
-        # Include transactions from mempool
+    def build_and_mine_block(self) -> LocalBlockOperation:
+        # Extract transactions
         with self.lock_mining:
-            transactions += self.build_valid_transactions_for_block()
-        tree = MerkleTree([tx.sign for tx in transactions])
+            transactions = [self.build_coinbase_transaction()]
+            valid_txs, tx_to_remove, deltas = self.build_valid_transactions_for_block()
+            transactions.extend(valid_txs)
+            deltas[self.my_peer.mid] += BLOCK_REWARD
 
+        tree = MerkleTree([tx.sign for tx in transactions])
         header = BlockHeader(
             seq_num=self.current_seq_num + 1,
             prev_block_hash=self.current_block_hash,
@@ -428,11 +444,12 @@ class NepheriteNode(Blockchain):
             difficulty=BLOCK_DIFFICULTY,
             nonce=0,
         )
-        return Block(header, transactions)
 
-    def mine_block(self) -> Block:
-        block = self.build_block()
-        blob = self.serializer.pack_serializable(block.header)
-        answer = Puzzle.compute(blob)
-        block.header.nonce = answer
-        return block
+        # Compute nonce
+        block_hash = self.get_block_hash(header)
+        nonce = Puzzle.compute(block_hash)
+        header.nonce = nonce  # update nonce
+
+        block_hash = self.get_block_hash(header)  # updated block hash
+        block = Block(header, transactions)
+        return (block, tx_to_remove, deltas)
