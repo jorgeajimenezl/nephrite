@@ -24,6 +24,16 @@ from nepherite.utils import sha256
 
 
 @dataclass
+class NodeStats:
+    current_seq_num: int
+    current_block_hash: bytes
+    mempool: int
+    blockset: int
+    invalid_blocks: int
+    chainstate: int
+
+
+@dataclass
 class TxOut:
     address: bytes
     amount: int
@@ -473,3 +483,13 @@ class NepheriteNode(Blockchain):
         block_hash = self.get_block_hash(header)  # updated block hash
         block = Block(header, transactions)
         return (block, tx_to_remove, deltas)
+
+    def get_snapshot(self) -> NodeStats:
+        return NodeStats(
+            current_seq_num=self.current_seq_num,
+            current_block_hash=self.current_block_hash.hex()[:6],
+            mempool=len(self.mempool),
+            blockset=len(self.blockset),
+            invalid_blocks=len(self.invalid_blocks),
+            chainstate=len(self.chainstate),
+        )
