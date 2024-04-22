@@ -117,3 +117,18 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
             self.overlay(0).crypto.is_valid_signature(pk, blob, transaction.sign)
         )
         self.assertEqual(addr, self.overlay(0).my_peer.mid)
+        
+    async def test_invalid_transaction(self):
+        self.initialize(NepheriteNode, 2)
+
+        await self.introduce_nodes()
+
+        # Arrange a transaction
+        tx_out = TxOut(self.nodes[0].my_peer.mid, 15)
+        tx = self.overlay(0).make_and_sign_transaction([tx_out])
+        # Alter the transaction payload
+        tx.payload.output[0].amount = 50
+        
+        # Assert that the transaction is invalid
+        self.assertFalse(self.overlay(0).verify_sign_transaction(tx))
+        
