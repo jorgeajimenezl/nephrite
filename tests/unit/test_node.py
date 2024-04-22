@@ -5,6 +5,7 @@ from typing import Any
 from asyncio import sleep
 
 from ipv8.test.base import TestBase
+import nepherite.puzzle
 
 from nepherite.node import (
     Block,
@@ -19,6 +20,8 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
     def setUp(self) -> None:
         super().setUp()
 
+        nepherite.puzzle.DIFFICULTY = 2
+        
         if not os.path.isdir("data/blocks"):
             os.mkdir("data/blocks")
         if not os.path.isdir("data/keys"):
