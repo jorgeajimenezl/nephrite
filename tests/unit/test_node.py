@@ -2,11 +2,10 @@ import os
 import shutil
 from collections.abc import Coroutine
 from typing import Any
-from asyncio import sleep
 
 from ipv8.test.base import TestBase
-import nepherite.puzzle
 
+import nepherite.puzzle
 from nepherite.node import (
     Block,
     NepheriteNode,
@@ -21,7 +20,7 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
         super().setUp()
 
         nepherite.puzzle.DIFFICULTY = 2
-        
+
         if not os.path.isdir("data/blocks"):
             os.mkdir("data/blocks")
         if not os.path.isdir("data/keys"):
@@ -105,14 +104,20 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
 
         for i in range(2):
             self.overlay(i).start_to_create_block()
-        
+
         # # Test the create_dummy_transaction method
-        with self.assertReceivedBy(1, [Transaction, Block], ordered=False) as received_messages:
+        with self.assertReceivedBy(
+            1, [Transaction, Block], ordered=False
+        ) as received_messages:
             self.overlay(0).create_dummy_transaction()
             await self.deliver_messages()
 
         # Assert that peer_1 received the dummy transaction and that it is signed and from the correct address
-        transaction = received_messages[0] if received_messages[0].__class__ == Transaction else received_messages[1]
+        transaction = (
+            received_messages[0]
+            if received_messages[0].__class__ == Transaction
+            else received_messages[1]
+        )
         pk = self.overlay(0).crypto.key_from_public_bin(transaction.pk)
         addr = pk.key_to_hash()
         blob = self.overlay(0).serializer.pack_serializable(transaction.payload)
@@ -120,7 +125,7 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
             self.overlay(0).crypto.is_valid_signature(pk, blob, transaction.sign)
         )
         self.assertEqual(addr, self.overlay(0).my_peer.mid)
-        
+
     async def test_invalid_transaction(self):
         self.initialize(NepheriteNode, 2)
 
@@ -131,7 +136,6 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
         tx = self.overlay(0).make_and_sign_transaction([tx_out])
         # Alter the transaction payload
         tx.payload.output[0].amount = 50
-        
+
         # Assert that the transaction is invalid
         self.assertFalse(self.overlay(0).verify_sign_transaction(tx))
-        
