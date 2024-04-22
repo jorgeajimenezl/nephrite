@@ -2,6 +2,7 @@ import os
 import shutil
 from collections.abc import Coroutine
 from typing import Any
+from asyncio import sleep
 
 from ipv8.test.base import TestBase
 
@@ -73,7 +74,7 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
         self.assertEqual(tx, received_messages[0])
 
         # Arrange a block
-        block = self.overlay(0).mine_block()
+        (block, _, _) = self.overlay(0).build_and_mine_block()
 
         # Send the block from node 0 to node 1 and assert that it was received
         with self.assertReceivedBy(1, [Block]) as received_messages:
@@ -95,17 +96,20 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
         self.assertEqual(pull_block_request, received_messages[0])
 
     async def test_node_methods(self):
-        self.initialize(NepheriteNode, 3)
+        self.initialize(NepheriteNode, 2)
 
         await self.introduce_nodes()
 
-        # Test the create_dummy_transaction method
-        with self.assertReceivedBy(1, [Transaction]) as received_messages:
+        for i in range(2):
+            self.overlay(i).start_to_create_block()
+        
+        # # Test the create_dummy_transaction method
+        with self.assertReceivedBy(1, [Transaction, Block], ordered=False) as received_messages:
             self.overlay(0).create_dummy_transaction()
             await self.deliver_messages()
 
         # Assert that peer_1 received the dummy transaction and that it is signed and from the correct address
-        transaction = received_messages[0]
+        transaction = received_messages[0] if received_messages[0].__class__ == Transaction else received_messages[1]
         pk = self.overlay(0).crypto.key_from_public_bin(transaction.pk)
         addr = pk.key_to_hash()
         blob = self.overlay(0).serializer.pack_serializable(transaction.payload)
