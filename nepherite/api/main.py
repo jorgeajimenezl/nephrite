@@ -93,6 +93,15 @@ async def get_block(block_hash: str):
         "block": block,
     }
 
+@app.get("/mempool")
+async def get_mempool():
+    node: NepheriteNode = ipv8_instance.overlays[0]
+    with node.lock_mining:
+        mempool = node.get_mempool()
+    return {
+        "mempool": mempool,
+    }
+
 def run_server(port: int):
     uvicorn.run(app, port=port)
 

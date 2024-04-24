@@ -40,6 +40,8 @@ class TxOutResource:
 @dataclass
 class TransactionResource:
     nonce: int
+    public_key: bytes
+    signature: bytes
     output: list[TxOutResource]
 
 @dataclass
@@ -534,6 +536,8 @@ class NepheriteNode(Blockchain):
             transactions=[
                 TransactionResource(
                     nonce=tx.payload.nonce,
+                    public_key=tx.pk.hex(),
+                    signature=tx.sign.hex(),
                     output=[
                         TxOutResource(
                             address=tx_out.address.hex(),
@@ -557,6 +561,8 @@ class NepheriteNode(Blockchain):
             transactions=[
                 TransactionResource(
                     nonce=tx.payload.nonce,
+                    public_key=tx.pk.hex(),
+                    signature=tx.sign.hex(),
                     output=[
                         TxOutResource(
                             address=tx_out.address.hex(),
@@ -566,3 +572,17 @@ class NepheriteNode(Blockchain):
                 ) for tx in block.transactions
             ],
         )
+        
+    def get_mempool(self) -> TransactionResource:
+        
+        return [TransactionResource(
+            nonce=tx.payload.nonce,
+            public_key=tx.pk.hex(),
+            signature=tx.sign.hex(),
+            output=[
+                TxOutResource(
+                    address=tx_out.address.hex(),
+                    amount=tx_out.amount,
+                ) for tx_out in tx.payload.output
+            ],
+        ) for tx in self.mempool.values()]
