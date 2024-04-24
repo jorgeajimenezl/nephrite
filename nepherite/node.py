@@ -32,10 +32,12 @@ class NodeStats:
     invalid_blocks: int
     chainstate: int
 
+
 @dataclass
 class TxOutResource:
     address: bytes
     amount: int
+
 
 @dataclass
 class TransactionResource:
@@ -43,6 +45,7 @@ class TransactionResource:
     public_key: bytes
     signature: bytes
     output: list[TxOutResource]
+
 
 @dataclass
 class BlockResource:
@@ -54,6 +57,7 @@ class BlockResource:
     difficulty: int
     nonce: int
     transactions: list[TransactionResource]
+
 
 @dataclass
 class TxOut:
@@ -523,31 +527,36 @@ class NepheriteNode(Blockchain):
             invalid_blocks=len(self.invalid_blocks),
             chainstate=len(self.chainstate),
         )
-        
+
     def get_blocks(self) -> list[BlockResource]:
-        return [BlockResource(
-            seq_num=block.header.seq_num,
-            hash=self.get_block_hash(block.header).hex(),
-            prev_block_hash=block.header.prev_block_hash.hex()[:6],
-            merkle_root_hash=block.header.merkle_root_hash.hex()[:6],
-            timestamp=block.header.timestamp,
-            difficulty=block.header.difficulty,
-            nonce=block.header.nonce,
-            transactions=[
-                TransactionResource(
-                    nonce=tx.payload.nonce,
-                    public_key=tx.pk.hex(),
-                    signature=tx.sign.hex(),
-                    output=[
-                        TxOutResource(
-                            address=tx_out.address.hex(),
-                            amount=tx_out.amount,
-                        ) for tx_out in tx.payload.output
-                    ],
-                ) for tx in block.transactions
-            ],
-        ) for block in self.blockset.values()]
-        
+        return [
+            BlockResource(
+                seq_num=block.header.seq_num,
+                hash=self.get_block_hash(block.header).hex(),
+                prev_block_hash=block.header.prev_block_hash.hex()[:6],
+                merkle_root_hash=block.header.merkle_root_hash.hex()[:6],
+                timestamp=block.header.timestamp,
+                difficulty=block.header.difficulty,
+                nonce=block.header.nonce,
+                transactions=[
+                    TransactionResource(
+                        nonce=tx.payload.nonce,
+                        public_key=tx.pk.hex(),
+                        signature=tx.sign.hex(),
+                        output=[
+                            TxOutResource(
+                                address=tx_out.address.hex(),
+                                amount=tx_out.amount,
+                            )
+                            for tx_out in tx.payload.output
+                        ],
+                    )
+                    for tx in block.transactions
+                ],
+            )
+            for block in self.blockset.values()
+        ]
+
     def get_block_by_hash(self, block_hash: bytes) -> BlockResource:
         block = self.blockset[block_hash]
         return BlockResource(
@@ -567,22 +576,27 @@ class NepheriteNode(Blockchain):
                         TxOutResource(
                             address=tx_out.address.hex(),
                             amount=tx_out.amount,
-                        ) for tx_out in tx.payload.output
+                        )
+                        for tx_out in tx.payload.output
                     ],
-                ) for tx in block.transactions
+                )
+                for tx in block.transactions
             ],
         )
-        
+
     def get_mempool(self) -> TransactionResource:
-        
-        return [TransactionResource(
-            nonce=tx.payload.nonce,
-            public_key=tx.pk.hex(),
-            signature=tx.sign.hex(),
-            output=[
-                TxOutResource(
-                    address=tx_out.address.hex(),
-                    amount=tx_out.amount,
-                ) for tx_out in tx.payload.output
-            ],
-        ) for tx in self.mempool.values()]
+        return [
+            TransactionResource(
+                nonce=tx.payload.nonce,
+                public_key=tx.pk.hex(),
+                signature=tx.sign.hex(),
+                output=[
+                    TxOutResource(
+                        address=tx_out.address.hex(),
+                        amount=tx_out.amount,
+                    )
+                    for tx_out in tx.payload.output
+                ],
+            )
+            for tx in self.mempool.values()
+        ]
