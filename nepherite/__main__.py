@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import os
 
 import yaml
 from ipv8.configuration import (
