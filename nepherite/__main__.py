@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import os
 
 import yaml
 from ipv8.configuration import (
@@ -49,10 +48,6 @@ async def start_communities(
 
 
 if __name__ == "__main__":
-    # Ensure the data directory exists
-    os.makedirs("data/keys", exist_ok=True)
-    os.makedirs("data/blocks", exist_ok=True)
-
     parser = argparse.ArgumentParser(
         prog="Blockchain",
         description="Code to execute blockchain.",
