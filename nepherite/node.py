@@ -100,6 +100,9 @@ class NepheriteNode(Blockchain):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
 
+        # Setup folders and stuff
+        self.setup()
+
         # self.blocks: dict[int, list[Block]] = defaultdict(list)
         self.mempool: dict[bytes, Transaction] = {}
         self.blockset: dict[bytes, Block] = {}
@@ -121,6 +124,11 @@ class NepheriteNode(Blockchain):
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
 
         self._last_seq_num_for_tx = -1
+
+    def setup(self):
+        # Ensure the data directory exists
+        os.makedirs("data/keys", exist_ok=True)
+        os.makedirs("data/blocks", exist_ok=True)
 
     def seed_genesis_block(self):
         genesis_block = Block(
