@@ -4,6 +4,7 @@ import sys
 from collections.abc import Coroutine
 from typing import Any
 
+import utils
 import uvicorn
 import yaml
 from dotenv import load_dotenv
@@ -70,37 +71,41 @@ async def run_blockchain(
 async def get_stats():
     node: NepheriteNode = ipv8_instance.overlays[0]
     with node.lock_mining:
-        stats = node.get_snapshot()
+        stats = utils.get_snapshot(node)
     return {
         "stats": stats,
     }
+
 
 @app.get("/blocks")
 async def get_blocks():
     node: NepheriteNode = ipv8_instance.overlays[0]
     with node.lock_mining:
-        blocks = node.get_blocks()
+        blocks = utils.get_blocks(node)
     return {
         "blocks": blocks,
     }
+
 
 @app.get("/blocks/{block_hash}")
 async def get_block(block_hash: str):
     node: NepheriteNode = ipv8_instance.overlays[0]
     with node.lock_mining:
-        block = node.get_block_by_hash(bytes.fromhex(block_hash))
+        block = utils.get_block_by_hash(node, bytes.fromhex(block_hash))
     return {
         "block": block,
     }
+
 
 @app.get("/mempool")
 async def get_mempool():
     node: NepheriteNode = ipv8_instance.overlays[0]
     with node.lock_mining:
-        mempool = node.get_mempool()
+        mempool = utils.get_mempool(node)
     return {
         "mempool": mempool,
     }
+
 
 def run_server(port: int):
     uvicorn.run(app, port=port)
