@@ -75,6 +75,14 @@ async def get_stats():
         "stats": stats,
     }
 
+@app.get("/blocks")
+async def get_blocks():
+    node: NepheriteNode = ipv8_instance.overlays[0]
+    with node.lock_mining:
+        blocks = node.get_blocks()
+    return {
+        "blocks": blocks,
+    }
 
 def run_server(port: int):
     uvicorn.run(app, port=port)

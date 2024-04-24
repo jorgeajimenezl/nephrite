@@ -32,6 +32,26 @@ class NodeStats:
     invalid_blocks: int
     chainstate: int
 
+@dataclass
+class TxOutResource:
+    address: bytes
+    amount: int
+
+@dataclass
+class TransactionResource:
+    nonce: int
+    output: list[TxOutResource]
+
+@dataclass
+class BlockResource:
+    seq_num: int
+    hash: bytes
+    prev_block_hash: bytes
+    merkle_root_hash: bytes
+    timestamp: int
+    difficulty: int
+    nonce: int
+    transactions: list[TransactionResource]
 
 @dataclass
 class TxOut:
@@ -493,3 +513,25 @@ class NepheriteNode(Blockchain):
             invalid_blocks=len(self.invalid_blocks),
             chainstate=len(self.chainstate),
         )
+        
+    def get_blocks(self) -> list[BlockResource]:
+        return [BlockResource(
+            seq_num=block.header.seq_num,
+            hash=self.get_block_hash(block.header).hex()[:6],
+            prev_block_hash=block.header.prev_block_hash.hex()[:6],
+            merkle_root_hash=block.header.merkle_root_hash.hex()[:6],
+            timestamp=block.header.timestamp,
+            difficulty=block.header.difficulty,
+            nonce=block.header.nonce,
+            transactions=[
+                TransactionResource(
+                    nonce=tx.payload.nonce,
+                    output=[
+                        TxOutResource(
+                            address=tx_out.address.hex(),
+                            amount=tx_out.amount,
+                        ) for tx_out in tx.payload.output
+                    ],
+                ) for tx in block.transactions
+            ],
+        ) for block in self.blockset.values()]
