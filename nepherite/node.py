@@ -517,7 +517,7 @@ class NepheriteNode(Blockchain):
     def get_blocks(self) -> list[BlockResource]:
         return [BlockResource(
             seq_num=block.header.seq_num,
-            hash=self.get_block_hash(block.header).hex()[:6],
+            hash=self.get_block_hash(block.header).hex(),
             prev_block_hash=block.header.prev_block_hash.hex()[:6],
             merkle_root_hash=block.header.merkle_root_hash.hex()[:6],
             timestamp=block.header.timestamp,
@@ -535,3 +535,26 @@ class NepheriteNode(Blockchain):
                 ) for tx in block.transactions
             ],
         ) for block in self.blockset.values()]
+        
+    def get_block_by_hash(self, block_hash: bytes) -> BlockResource:
+        block = self.blockset[block_hash]
+        return BlockResource(
+            seq_num=block.header.seq_num,
+            hash=self.get_block_hash(block.header).hex(),
+            prev_block_hash=block.header.prev_block_hash.hex()[:6],
+            merkle_root_hash=block.header.merkle_root_hash.hex()[:6],
+            timestamp=block.header.timestamp,
+            difficulty=block.header.difficulty,
+            nonce=block.header.nonce,
+            transactions=[
+                TransactionResource(
+                    nonce=tx.payload.nonce,
+                    output=[
+                        TxOutResource(
+                            address=tx_out.address.hex(),
+                            amount=tx_out.amount,
+                        ) for tx_out in tx.payload.output
+                    ],
+                ) for tx in block.transactions
+            ],
+        )
