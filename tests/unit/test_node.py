@@ -18,19 +18,10 @@ from nepherite.node import (
 class NepheriteNodeTests(TestBase[NepheriteNode]):
     def setUp(self) -> None:
         super().setUp()
-
         nepherite.puzzle.DIFFICULTY = 2
 
-        if not os.path.isdir("data/blocks"):
-            os.mkdir("data/blocks")
-        if not os.path.isdir("data/keys"):
-            os.mkdir("data/keys")
-
-    async def tearDown(self) -> Coroutine[Any, Any, None]:
+    async def tearDown(self) -> None:
         await super().tearDown()
-
-        shutil.rmtree("data/keys", ignore_errors=True)
-        shutil.rmtree("data/blocks", ignore_errors=True)
 
     async def test_genesis_block_exists(self):
         """
