@@ -24,55 +24,44 @@ from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import sha256
 from enum import Enum
 
-
+Token = {
+    'NEPHERITE' : 1,
+    'DEX_TOKEN' : 2,
+    'SHIBA_INU' : 3,
+}
 @dataclass
 class TxOut:
     address: bytes
     amount: int
 
 @dataclass
-class TransactionType(Enum):
-    TRANSFER = 0
-    COMMIT = 1
-    REVEAL = 2
-    ROUND = 3
-
-@dataclass
 class TransactionPayload:
     nonce: int
     output: list[TxOut]
+    token: int
+
 
 @dataclass
-class CommitPayload:
+class AddLiquidityPayload:
     nonce: int
-    commit: bytes
-    round: bytes
+    value: int
 
 @dataclass
-class RevealPayload:
+class RemoveLiquidityPayload:
     nonce: int
-    vote: bytes
-    commit: bytes
-    round: bytes
+    value: int
 
 @dataclass
-class Round:
-    round: bytes
-    participants: list[bytes]
-    commits: dict[bytes, bytes]
-    reveals: dict[bytes, bytes]
-
-@dataclass
-class RoundPayload:
-    round: bytes
-    participants: list[bytes]
+class ExchangePayload:
+    nonce: int
+    value: int
+    token: bytes
 
 @dataclass(msg_id=1)
-class BLockchainMessage:
-    payload: TransactionPayload | CommitPayload | RevealPayload
+class Transaction:
+    payload: TransactionPayload
     pk: bytes
     sign: bytes
-    type: TransactionType
 
 
 @dataclass(msg_id=2)
@@ -88,15 +77,15 @@ class BlockHeader:
 @dataclass(msg_id=3)
 class Block:
     header: BlockHeader
-    transactions: list[BLockchainMessage]
+    transactions: list[Transaction]
 
 
 @dataclass(msg_id=4)
 class PullBlockRequest:
     block_hash: bytes
 
-
-LocalBlockOperation = tuple[Block, list[BLockchainMessage], dict[bytes, int]]
+# [A block, Messages to undo, deltas to apply]
+LocalBlockOperation = tuple[Block, list[Transaction], dict[tuple[bytes, int], int]]
 
 
 class NepheriteNode(Blockchain):
@@ -104,10 +93,11 @@ class NepheriteNode(Blockchain):
         super().__init__(settings)
 
         # Setup folders and stuff
+        self.genesis_block_hash = None
         self.setup()
 
         # self.blocks: dict[int, list[Block]] = defaultdict(list)
-        self.mempool: dict[bytes, BLockchainMessage] = {}
+        self.mempool: dict[bytes, Transaction] = {}
         self.blockset: dict[bytes, Block] = {}
         self.invalid_blocks: set[bytes] = set()
         self.current_seq_num = 0
@@ -116,13 +106,14 @@ class NepheriteNode(Blockchain):
 
         # options = Options(raw_mode=False)
         # self.chainstate = Rdict("data/chainstate.db", options=options)
-        self.chainstate: defaultdict[bytes, int] = defaultdict(int)
+        self.chainstate: defaultdict[tuple[bytes, int], int] = defaultdict(int)
+
         self.lock_mining = Lock()
         self.mining_cancellation = asyncio.Event()
 
         self.seed_genesis_block()
 
-        self.add_message_handler(BLockchainMessage, self.on_blockchain_message)
+        self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(Block, self.on_block)
         self.add_message_handler(PullBlockRequest, self.on_pull_block_request)
 
@@ -163,7 +154,7 @@ class NepheriteNode(Blockchain):
         self._log("info", f"Current hash: {self.current_block_hash.hex()[:6]}")
         self._log(
             "info",
-            f"Current chainstate: {[f'{k.hex()[:6]}: {v}' for k, v in self.chainstate.items()]}",
+            f"Current chainstate: {[f'{k[0].hex()[:6]}:{k[1]} {v}' for k, v in self.chainstate.items()]}",
         )
 
     async def mining_monitor(self):
@@ -219,7 +210,7 @@ class NepheriteNode(Blockchain):
         if self._last_seq_num_for_tx == self.current_seq_num:
             return
         self._last_seq_num_for_tx = self.current_seq_num
-        cnt = self.chainstate[self.my_peer.mid]
+        cnt = self.chainstate[self.my_peer.mid,Token['NEPHERITE']]
         if cnt < 10:
             return
 
@@ -248,27 +239,23 @@ class NepheriteNode(Blockchain):
             blob = f.read()
         return self.serializer.unpack_serializable(blob, Block)
 
-    def make_and_sign_transaction(self, output: list[TxOut]) -> BLockchainMessage:
+    def make_and_sign_transaction(self, output: list[TxOut], token:int = 1) -> Transaction:
         payload = TransactionPayload(
             nonce=int.from_bytes(os.urandom(4)),
             output=output,
+            token=token
         )
         blob = self.serializer.pack_serializable(payload)
         sign = self.crypto.create_signature(self.my_peer.key, blob)
         pk = self.my_peer.key.pub().key_to_bin()
-        return BLockchainMessage(payload, pk, sign,type=TransactionType.TRANSFER)
+        return Transaction(payload, pk, sign)
 
-    def sign_verify(self,message:BLockchainMessage)-> bool:
+    def verify_sign_transaction(
+        self, message: Transaction, coinbase: bool = False
+    ) -> bool:
         pk = self.crypto.key_from_public_bin(message.pk)
         blob = self.serializer.pack_serializable(message.payload)
         if not self.crypto.is_valid_signature(pk, blob, message.sign):
-            return False
-        return True
-
-    def verify_transaction(
-        self, transaction: BLockchainMessage, coinbase: bool = False
-    ) -> bool:
-        if not self.sign_verify(transaction):
             return False
         return True
 
@@ -290,39 +277,26 @@ class NepheriteNode(Blockchain):
 
         return True
 
-    @message_wrapper(BLockchainMessage)
-    def on_blockchain_message(self, peer: Peer, message: BLockchainMessage) -> None:
-        """
-        Handle incoming messages from peers
-        This allow to extend the functionality of the node without modifying the core code
-        Args:
-            peer:
-            message:
+    def on_add_liquidity(self, peer: Peer, message: Transaction) -> None:
+        pass
 
-        Returns:
+    def on_remove_liquidity(self, peer: Peer, message: Transaction) -> None:
+        pass
 
-        """
-        self._log("info", f"Message from {peer.mid.hex()[:6]} received")
-        switch = {
-            TransactionType.TRANSFER: self.on_transaction,
-            TransactionType.COMMIT: self.on_commit_or_reveal,
-            TransactionType.REVEAL: self.on_commit_or_reveal,
-            TransactionType.ROUND: self.on_commit_or_reveal,
-        }
-        switch[message.type](peer, message)
+    def on_exchange(self, peer: Peer, message: Transaction) -> None:
+        pass
 
-    def on_commit_or_reveal(self, peer: Peer, message: BLockchainMessage) -> None:
-        self._log("info", f"Commit/Reveal from {peer.mid.hex()[:6]} received")
-        if not self.sign_verify(message):
-            self._log("warn", f"Commit/Reveal from {peer.mid.hex()[:6]} is invalid")
-            return
-        self._log("info", f"Commit/Reveal from {peer.mid.hex()[:6]} is valid")
-        self.mempool[message.sign] = message
-        for u in self.get_peers():
-            if u.mid != peer.mid:
-                self.ez_send(u, message)
+    def undo_add_liquidity(self, message: Transaction) -> None:
+        pass
 
-    def on_transaction(self, peer: Peer, transaction: BLockchainMessage) -> None:
+    def undo_remove_liquidity(self, message: Transaction) -> None:
+        pass
+
+    def undo_exchange(self, message: Transaction) -> None:
+        pass
+
+    @message_wrapper(Transaction)
+    def on_transaction(self, peer: Peer, transaction: Transaction) -> None:
         # TODO: remove this debug
         peer_id = peer.mid.hex()[:6]
         self._log("info", f"Transaction from {peer_id} received")
@@ -356,19 +330,20 @@ class NepheriteNode(Blockchain):
         self.ez_send(peer, self.blockset[block_hash])
 
     def get_transaction_deltas(
-        self, transaction: BLockchainMessage, coinbase: bool = False
-    ) -> dict[bytes, int]:
+        self, transaction: Transaction, coinbase: bool = False
+    ) -> dict[tuple[bytes, int], int]:
         deltas = defaultdict(int)
         out = 0
+        token = transaction.payload.token
         for utxo in transaction.payload.output:
             addr = utxo.address
             amount = utxo.amount
-            deltas[addr] += amount
+            deltas[addr,token] += amount
             out += amount
         if not coinbase:
             pk = self.crypto.key_from_public_bin(transaction.pk)
             addr = pk.key_to_hash()
-            deltas[addr] -= out
+            deltas[addr,token] -= out
         return deltas
 
     def rollback(self, v: bytes) -> tuple[None, dict[Any, Any], list[bytes]] | tuple[
@@ -390,7 +365,14 @@ class NepheriteNode(Blockchain):
                 deltas,
                 -1,
             )
-            for tx in self.blockset[u].transactions[1:]:
+            self.apply_transaction(
+                self.get_transaction_deltas(
+                    self.blockset[u].transactions[1], coinbase=True
+                ),
+                deltas,
+                -1,
+            )
+            for tx in self.blockset[u].transactions[2:]:
                 dt = self.get_transaction_deltas(tx, coinbase=False)
                 self.apply_transaction(dt, deltas, -1)
 
@@ -452,8 +434,15 @@ class NepheriteNode(Blockchain):
                                 ),
                                 deltas,
                             )
+                            self.apply_transaction(
+                                self.get_transaction_deltas(
+                                    self.blockset[in_block].transactions[1],
+                                    coinbase=True,
+                                ),
+                                deltas,
+                            )
 
-                            for tx in self.blockset[in_block].transactions[1:]:
+                            for tx in self.blockset[in_block].transactions[2:]:
                                 dt = self.get_transaction_deltas(tx, coinbase=False)
                                 if all(
                                     self.chainstate[addr] + value + deltas[addr] >= 0
@@ -494,26 +483,28 @@ class NepheriteNode(Blockchain):
 
                         # Update chainstate (UTXOs)
                         self.apply_transaction(deltas, self.chainstate)
+
+                        self._log("info", f"Current chainstate: {[f'{k} {v}' for k, v in self.chainstate.items()]}")
                         self._log("info", "Chain reorganization completed")
 
-    def build_coinbase_transaction(self) -> BLockchainMessage:
-        output = [TxOut(self.my_peer.mid, BLOCK_REWARD)]
-        return self.make_and_sign_transaction(output)
+    def build_coinbase_transaction(self, multiplier: int = 1, token: int = 1) -> Transaction:
+        output = [TxOut(self.my_peer.mid, BLOCK_REWARD * multiplier)]
+        return self.make_and_sign_transaction(output, token)
 
     def apply_transaction(
-        self, deltas: dict[bytes, int], chain_state: dict[bytes, int], sign: int = 1
+        self, deltas: dict[tuple[bytes, int], int], chain_state: dict[tuple[bytes, int], int], sign: int = 1
     ):
         for address, value in deltas.items():
-            chain_state[address] += value * sign
+            chain_state[address] += sign * value
 
     def build_valid_transactions_for_block(
         self,
-    ) -> tuple[list[BLockchainMessage], list[BLockchainMessage], defaultdict[bytes, int]]:
+    ) -> tuple[list[Transaction], list[Transaction], defaultdict[[bytes,int], int]]:
         """
                 Get valid transactions from mempool
                 Delete invalid transactions from mempool while iterating
                 Returns:
-                    list[BLockchainMessage]: List of valid transactions for the next block
+                    list[Transaction]: List of valid transactions for the next block
                 """
         valid_transactions = []
         tx_to_remove = []
@@ -534,10 +525,11 @@ class NepheriteNode(Blockchain):
     def build_and_mine_block(self) -> LocalBlockOperation:
         # Extract transactions
         with self.lock_mining:
-            transactions = [self.build_coinbase_transaction()]
+            transactions = [self.build_coinbase_transaction(), self.build_coinbase_transaction(token=Token['SHIBA_INU'], multiplier=2)]
             valid_txs, tx_to_remove, deltas = self.build_valid_transactions_for_block()
             transactions.extend(valid_txs)
-            deltas[self.my_peer.mid] += BLOCK_REWARD
+            deltas[self.my_peer.mid,Token['NEPHERITE']] += BLOCK_REWARD
+            deltas[self.my_peer.mid,Token['SHIBA_INU']] += 2 * BLOCK_REWARD
 
         tree = MerkleTree([tx.sign for tx in transactions])
         header = BlockHeader(
