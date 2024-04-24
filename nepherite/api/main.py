@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 from collections.abc import Coroutine
 from typing import Any
 
@@ -7,6 +8,7 @@ import uvicorn
 import yaml
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from ipv8.configuration import (
     ConfigBuilder,
     Strategy,
@@ -21,6 +23,11 @@ from nepherite.node import NepheriteNode
 load_dotenv()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+)
 
 ipv8_instance: IPv8 = None
 
@@ -85,6 +92,7 @@ async def main():
         connections = topology[node_id]
 
     loop = asyncio.get_event_loop()
+
     await asyncio.gather(
         run_blockchain(node_id, connections),
         loop.run_in_executor(None, run_server, port),
@@ -92,4 +100,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        sys.exit(0)
