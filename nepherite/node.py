@@ -282,8 +282,7 @@ class NepheriteNode(Blockchain):
         cnt = self.chainstate[self.my_peer.mid, Token["NEPHERITE"]]
         if cnt < 10:
             return
-        # aaa
-        amount_out = os.urandom(5) % cnt
+        amount_out = cnt//3
         exchange_tx = self.make_and_sign_exchange_transaction(
             Token["NEPHERITE"], Token["DEX_TOKEN"], amount_out
         )
