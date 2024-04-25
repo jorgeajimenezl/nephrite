@@ -95,6 +95,7 @@ class BlockHeader:
     difficulty: int
     nonce: int
 
+
 @dataclass(msg_id=3)
 class Block:
     header: BlockHeader
