@@ -124,7 +124,9 @@ class NepheriteNode(Blockchain):
         )
         self.register_anonymous_task("mining_monitor", self.mining_monitor)
         self.register_anonymous_task("report", self.report, interval=10)
-        self.register_anonymous_task("save_blocks", self.commit_blocks_to_disk, interval=20)
+        self.register_anonymous_task(
+            "save_blocks", self.commit_blocks_to_disk, interval=20
+        )
 
     def report(self):
         self._log("info", f"Current block: {self.current_seq_num}")
@@ -231,7 +233,7 @@ class NepheriteNode(Blockchain):
                         break
                 if pt == self.genesis_block_hash:
                     return
-                
+
                 # save blocks to disk
                 while pt != self.genesis_block_hash:
                     block = self.blockset.get(pt, None)
