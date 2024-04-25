@@ -53,7 +53,7 @@ def get_block_by_hash(node: NepheriteNode, block_hash: bytes) -> BlockResource:
     return BlockResource(
         seq_num=block.header.seq_num,
         hash=node.get_block_hash(block.header).hex(),
-        prev_block_hash=block.header.prev_block_hash.hex()[:6],
+        prev_block_hash=block.header.prev_block_hash.hex(),
         merkle_root_hash=block.header.merkle_root_hash.hex()[:6],
         timestamp=block.header.timestamp,
         difficulty=block.header.difficulty,
