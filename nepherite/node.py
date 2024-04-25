@@ -1,8 +1,9 @@
 import asyncio
-import os
 import json
+import os
 import random
 import time
+import datetime
 from collections import defaultdict
 from threading import Lock
 
@@ -140,17 +141,21 @@ class NepheriteNode(Blockchain):
         while pt != self.genesis_block_hash:
             block = self.blockset[pt]
             blocks.append(
-                {   
+                {
                     "hash": self.get_block_hash(block.header).hex()[:12],
                     "header": {
                         "seq_num": block.header.seq_num,
                         "prev_block_hash": block.header.prev_block_hash.hex()[:12],
                         "merkle_root_hash": block.header.merkle_root_hash.hex()[:12],
-                        "timestamp": block.header.timestamp,
+                        "timestamp": (
+                            datetime.datetime.fromtimestamp(
+                                block.header.timestamp
+                            ).strftime("%Y-%m-%d %H:%M:%S")
+                        ),
                         "difficulty": block.header.difficulty,
                         "nonce": block.header.nonce,
                     },
-                    "transactions": [tx.sign.hex()[:12] for tx in block.transactions]
+                    "transactions": [tx.sign.hex()[:12] for tx in block.transactions],
                 }
             )
             pt = block.header.prev_block_hash
@@ -501,7 +506,7 @@ class NepheriteNode(Blockchain):
             seq_num=self.current_seq_num + 1,
             prev_block_hash=self.current_block_hash,
             merkle_root_hash=tree.root.hash,
-            timestamp=time.monotonic_ns() // 1_000,
+            timestamp=int(time.time()),
             difficulty=BLOCK_DIFFICULTY,
             nonce=0,
         )
