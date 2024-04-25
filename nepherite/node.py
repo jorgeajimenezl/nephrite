@@ -159,7 +159,7 @@ class NepheriteNode(Blockchain):
 
             # TODO: remove this sh** (is ugly but works for now)
             if last_seq_num != self.current_seq_num:
-                self._log("warn", "Block already mined")
+                self._log("warn", "Block is already mined from another peer")
                 return
 
             # Commit block changes
@@ -189,16 +189,20 @@ class NepheriteNode(Blockchain):
         cnt = self.chainstate[self.my_peer.mid]
         if cnt < 10:
             return
+        cnt = min(cnt, 10)
 
         peer = random.choice(self.get_peers())  # nosec B311
-        out = [TxOut(peer.mid, min(cnt, 10))]
+        out = [TxOut(peer.mid, cnt)]
         tx = self.make_and_sign_transaction(out)
         self.mempool[tx.sign] = tx  # add to mempool
 
         for peer in self.get_peers():
             if peer.mid != self.my_peer.mid:
                 self.ez_send(peer, tx)
-                self._log("debug", f"Sent tx with {cnt} coins to {peer.mid.hex()[:6]}")
+                self._log(
+                    "debug",
+                    f"Sent TX [{tx.sign}] with {cnt} coins to {peer.mid.hex()[:6]}",
+                )
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
         blob = self.serializer.pack_serializable(header)

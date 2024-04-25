@@ -3,7 +3,10 @@ import logging
 from cryptography.hazmat.primitives import hashes
 
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, 
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    filename='app.log',  # Specify the filename here
+    filemode='w'         # Set the file mode to 'w' to overwrite the file each time
 )
 
 
