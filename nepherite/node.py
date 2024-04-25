@@ -753,9 +753,13 @@ class NepheriteNode(Blockchain):
                     token=Token["SHIBA_INU"], multiplier=SHIBA_RATE
                 ),
             ]
-            valid_txs, exchange_tx, tx_to_remove, tx_ex_to_remove, deltas = (
-                self.build_valid_transactions_for_block()
-            )
+            (
+                valid_txs,
+                exchange_tx,
+                tx_to_remove,
+                tx_ex_to_remove,
+                deltas,
+            ) = self.build_valid_transactions_for_block()
             transactions.extend(valid_txs)
             deltas[self.my_peer.mid, Token["NEPHERITE"]] += BLOCK_REWARD
             deltas[self.my_peer.mid, Token["SHIBA_INU"]] += SHIBA_RATE * BLOCK_REWARD
