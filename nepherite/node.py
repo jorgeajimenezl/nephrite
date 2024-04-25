@@ -1,5 +1,6 @@
 import asyncio
 import os
+import json
 import random
 import time
 from collections import defaultdict
@@ -132,6 +133,16 @@ class NepheriteNode(Blockchain):
             "info",
             f"Current chainstate: {[f'{k.hex()[:6]}: {v}' for k, v in self.chainstate.items()]}",
         )
+
+        # shit
+        blocks = []
+        pt = self.current_block_hash
+        while pt != self.genesis_block_hash:
+            block = self.blockset[pt]
+            blocks.append(block)
+
+        with open("app-blocks.json", "wb") as f:
+            json.dump(blocks, f)
 
     async def mining_monitor(self):
         self._log("info", "Mining monitor started")
