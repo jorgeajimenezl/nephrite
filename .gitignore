@@ -6,6 +6,9 @@ __pycache__/
 # Data
 data/
 
+# Logs
+*.log*
+
 # pyenv_local config
 .python-version
 
