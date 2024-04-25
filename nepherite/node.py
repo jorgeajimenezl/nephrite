@@ -166,9 +166,9 @@ class NepheriteNode(Blockchain):
         self.blockset[self.current_block_hash] = genesis_block
 
     def on_start(self):
-        # self.register_anonymous_task(
-        #     "create_dummy_transaction", self.create_dummy_transaction, interval=5
-        # )
+        self.register_anonymous_task(
+            "create_dummy_transaction", self.create_dummy_transaction, interval=5
+        )
         self.register_anonymous_task(
             "create_dummy_exchange_transaction", self.create_dummy_exchange_transaction, interval=20
         )
@@ -324,7 +324,6 @@ class NepheriteNode(Blockchain):
         bool, defaultdict[tuple[bytes, int], int]]:
         if not self.verify_sign_transaction(message.exchange_message):
             self._log("warn", f"Invalid exchange record from {message.pk.hex()[:6]}")
-            print(message)
             return False, None
         tx_ex = message.exchange_message
         dt, amount_out = self.get_exchange_tokens_out(tx_ex, pool)
