@@ -124,6 +124,7 @@ class NepheriteNode(Blockchain):
         )
         self.register_anonymous_task("mining_monitor", self.mining_monitor)
         self.register_anonymous_task("report", self.report, interval=10)
+        self.register_anonymous_task("save_blocks", self.commit_blocks_to_disk, interval=20)
 
     def report(self):
         self._log("info", f"Current block: {self.current_seq_num}")
@@ -175,9 +176,6 @@ class NepheriteNode(Blockchain):
                 for tx in tx_to_remove:
                     self.mempool.pop(tx.sign)
 
-                # Commit block to disk
-                self.commit_blocks_to_disk()
-
                 self._log("info", f"Block {block.header.seq_num} mined")
             for peer in self.get_peers():
                 self.ez_send(peer, block)
@@ -221,30 +219,31 @@ class NepheriteNode(Blockchain):
     def commit_blocks_to_disk(self) -> None:
         self._log("info", "Committing blocks to disk")
 
-        try:
-            # find the block with enough gap
-            pt = self.current_block_hash
-            while pt != self.genesis_block_hash:
-                block = self.blockset.get(pt, None)
-                if block is None:
+        with self.lock_mining:
+            try:
+                # find the block with enough gap
+                pt = self.current_block_hash
+                while pt != self.genesis_block_hash:
+                    block = self.blockset.get(pt, None)
+                    if block is None:
+                        return
+                    if self.current_seq_num - COMMIT_BLOCK_GAP >= block.header.seq_num:
+                        break
+                if pt == self.genesis_block_hash:
                     return
-                if self.current_seq_num - COMMIT_BLOCK_GAP >= block.header.seq_num:
-                    break
-            if pt == self.genesis_block_hash:
-                return
-            
-            # save blocks to disk
-            while pt != self.genesis_block_hash:
-                block = self.blockset.get(pt, None)
-                if block is None:
-                    return
-                # Stop to save blocks if the block is already in disk
-                if os.path.exists(f"data/blocks/{block.header.seq_num}"):
-                    break
-                self.save_block(block)
-                pt = block.header.prev_block_hash
-        except Exception as e:
-            self._log("error", str(e))
+                
+                # save blocks to disk
+                while pt != self.genesis_block_hash:
+                    block = self.blockset.get(pt, None)
+                    if block is None:
+                        return
+                    # Stop to save blocks if the block is already in disk
+                    if os.path.exists(f"data/blocks/{block.header.seq_num}"):
+                        break
+                    self.save_block(block)
+                    pt = block.header.prev_block_hash
+            except Exception as e:
+                self._log("error", str(e))
 
     def make_and_sign_transaction(self, output: list[TxOut]) -> Transaction:
         payload = TransactionPayload(
@@ -456,9 +455,6 @@ class NepheriteNode(Blockchain):
                         # Update chainstate (UTXOs)
                         self.apply_transaction(deltas, self.chainstate)
                         self._log("info", "Chain reorganization completed")
-
-                        # Commit blocks to disk
-                        self.commit_blocks_to_disk()
 
     def build_coinbase_transaction(self) -> Transaction:
         output = [TxOut(self.my_peer.mid, BLOCK_REWARD)]
