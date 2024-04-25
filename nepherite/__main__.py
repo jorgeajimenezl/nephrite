@@ -22,6 +22,9 @@ async def start_communities(
     docker: bool = False,
 ) -> None:
     event = create_event_with_signals()
+    
+    # setup the NepheriteNode
+    NepheriteNode.setup()
 
     builder = ConfigBuilder().clear_keys().clear_overlays()
     builder.add_key("nepherite-peer", "medium", f"data/keys/ec{node_id}.pem")

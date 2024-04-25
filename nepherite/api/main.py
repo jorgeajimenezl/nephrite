@@ -32,8 +32,9 @@ async def run_blockchain(
     docker: bool = False,
 ):
     global ipv8_instance
-
     event = create_event_with_signals()
+
+    NepheriteNode.setup()
 
     builder = ConfigBuilder().clear_keys().clear_overlays()
     builder.add_key("nepherite-peer", "medium", f"data/keys/ec{node_id}.pem")
@@ -129,9 +130,5 @@ async def get_mempool():
 
 
 if __name__ == "__main__":
-    os.makedirs("data/keys", exist_ok=True)
-    os.makedirs("data/blocks", exist_ok=True)
-
     port = int(os.getenv("PORT", 8000))
-
     uvicorn.run(app, port=port)

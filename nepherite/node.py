@@ -1,6 +1,7 @@
 import asyncio
 import os
 import random
+import stat
 import time
 from collections import defaultdict
 from threading import Lock
@@ -71,9 +72,6 @@ class NepheriteNode(Blockchain):
     def __init__(self, settings: CommunitySettings) -> None:
         super().__init__(settings)
 
-        # Setup folders and stuff
-        self.setup()
-
         # self.blocks: dict[int, list[Block]] = defaultdict(list)
         self.mempool: dict[bytes, Transaction] = {}
         self.blockset: dict[bytes, Block] = {}
@@ -96,8 +94,10 @@ class NepheriteNode(Blockchain):
 
         self._last_seq_num_for_tx = -1
 
-    def setup(self):
+    @staticmethod
+    def setup():
         # Ensure the data directory exists
+        os.makedirs("data", exist_ok=True)
         os.makedirs("data/keys", exist_ok=True)
         os.makedirs("data/blocks", exist_ok=True)
 
