@@ -4,7 +4,7 @@ import random
 import time
 from collections import defaultdict
 from threading import Lock
-from typing import Tuple, Dict, Any, List
+from typing import Any
 
 from ipv8.community import CommunitySettings
 from ipv8.messaging.payload_dataclass import dataclass
@@ -23,7 +23,6 @@ from nepherite.merkle import MerkleTree
 from nepherite.puzzle import DIFFICULTY as BLOCK_DIFFICULTY
 from nepherite.puzzle import HashNoncePuzzle as Puzzle
 from nepherite.utils import sha256
-from enum import Enum
 
 Token = {
     "NEPHERITE": 1,
@@ -95,7 +94,6 @@ class BlockHeader:
     timestamp: int
     difficulty: int
     nonce: int
-
 
 @dataclass(msg_id=3)
 class Block:
@@ -283,7 +281,8 @@ class NepheriteNode(Blockchain):
         cnt = self.chainstate[self.my_peer.mid, Token["NEPHERITE"]]
         if cnt < 10:
             return
-        amount_out = random.randint(1, cnt)
+        # aaa
+        amount_out = os.urandom(5) % cnt
         exchange_tx = self.make_and_sign_exchange_transaction(
             Token["NEPHERITE"], Token["DEX_TOKEN"], amount_out
         )
