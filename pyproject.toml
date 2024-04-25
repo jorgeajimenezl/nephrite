@@ -18,6 +18,8 @@ pyyaml = "*"
 trio = "0.25.0"
 cryptography = "^42.0.5"
 # rocksdict = "^0.3.0"
+uvicorn = "^0.29.0"
+fastapi = "^0.110.2"
 
 
 [tool.poetry.group.dev.dependencies]
