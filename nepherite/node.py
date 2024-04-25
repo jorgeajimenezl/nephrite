@@ -16,6 +16,7 @@ from nepherite.config import (
     BLOCK_SIZE,
     BLOCK_TTL,
     CHAIN_GAP_SIZE,
+    COMMIT_BLOCK_GAP,
 )
 from nepherite.merkle import MerkleTree
 from nepherite.puzzle import DIFFICULTY as BLOCK_DIFFICULTY
@@ -175,6 +176,9 @@ class NepheriteNode(Blockchain):
                 for tx in tx_to_remove:
                     self.mempool.pop(tx.sign)
 
+                # Commit block to disk
+                self.commit_blocks_to_disk()
+
                 self._log("info", f"Block {block.header.seq_num} mined")
             for peer in self.get_peers():
                 self.ez_send(peer, block)
@@ -214,6 +218,25 @@ class NepheriteNode(Blockchain):
         with open(f"data/blocks/{seq_num}", "rb") as f:
             blob = f.read()
         return self.serializer.unpack_serializable(blob, Block)
+
+    def commit_blocks_to_disk(self) -> None:
+        # find the block with enough gap
+        pt = self.current_block_hash
+        while pt != self.genesis_block_hash:
+            block = self.blockset[pt]
+            if self.current_seq_num - COMMIT_BLOCK_GAP >= block.header.seq_num:
+                break
+        if pt == self.genesis_block_hash:
+            return
+        
+        # save blocks to disk
+        while pt != self.genesis_block_hash:
+            block = self.blockset[pt]
+            # Stop to save blocks if the block is already in disk
+            if os.path.exists(f"data/blocks/{block.header.seq_num}"):
+                break
+            self.save_block(block)
+            pt = block.header.prev_block_hash
 
     def make_and_sign_transaction(self, output: list[TxOut]) -> Transaction:
         payload = TransactionPayload(
@@ -425,6 +448,9 @@ class NepheriteNode(Blockchain):
                         # Update chainstate (UTXOs)
                         self.apply_transaction(deltas, self.chainstate)
                         self._log("info", "Chain reorganization completed")
+
+                        # Commit blocks to disk
+                        self.commit_blocks_to_disk()
 
     def build_coinbase_transaction(self) -> Transaction:
         output = [TxOut(self.my_peer.mid, BLOCK_REWARD)]
