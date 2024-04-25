@@ -16,7 +16,10 @@ class MerkleTree:
 
     def __init__(self, items: list[bytes]) -> None:
         self.items = items
-        self.root = self.build_tree(0, len(items) - 1)
+
+        self.root = MerkleTree.Node(b"", None, None)
+        if len(items) != 0:
+            self.root = self.build_tree(0, len(items) - 1)
 
     def build_tree(self, l: int, r: int) -> Node:  # noqa: E741
         if l == r:
