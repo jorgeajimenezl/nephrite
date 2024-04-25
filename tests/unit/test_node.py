@@ -1,8 +1,3 @@
-import os
-import shutil
-from collections.abc import Coroutine
-from typing import Any
-
 from ipv8.test.base import TestBase
 
 import nepherite.puzzle

@@ -228,7 +228,7 @@ class NepheriteNode(Blockchain):
                 break
         if pt == self.genesis_block_hash:
             return
-        
+
         # save blocks to disk
         while pt != self.genesis_block_hash:
             block = self.blockset[pt]
