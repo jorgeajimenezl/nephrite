@@ -224,7 +224,9 @@ class NepheriteNode(Blockchain):
         # find the block with enough gap
         pt = self.current_block_hash
         while pt != self.genesis_block_hash:
-            block = self.blockset[pt]
+            block = self.blockset.get(pt, None)
+            if block is None:
+                return
             if self.current_seq_num - COMMIT_BLOCK_GAP >= block.header.seq_num:
                 break
         if pt == self.genesis_block_hash:
@@ -233,7 +235,9 @@ class NepheriteNode(Blockchain):
         self._log("info", f"Committing blocks from {block.header.seq_num} to disk")
         # save blocks to disk
         while pt != self.genesis_block_hash:
-            block = self.blockset[pt]
+            block = self.blockset.get(pt, None)
+            if block is None:
+                return
             # Stop to save blocks if the block is already in disk
             if os.path.exists(f"data/blocks/{block.header.seq_num}"):
                 break
