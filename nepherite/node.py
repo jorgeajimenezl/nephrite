@@ -1,7 +1,6 @@
 import asyncio
 import os
 import random
-import stat
 import time
 from collections import defaultdict
 from threading import Lock
@@ -220,6 +219,8 @@ class NepheriteNode(Blockchain):
         return self.serializer.unpack_serializable(blob, Block)
 
     def commit_blocks_to_disk(self) -> None:
+        self._log("info", "Committing blocks to disk")
+
         # find the block with enough gap
         pt = self.current_block_hash
         while pt != self.genesis_block_hash:
@@ -229,6 +230,7 @@ class NepheriteNode(Blockchain):
         if pt == self.genesis_block_hash:
             return
 
+        self._log("info", f"Committing blocks from {block.header.seq_num} to disk")
         # save blocks to disk
         while pt != self.genesis_block_hash:
             block = self.blockset[pt]

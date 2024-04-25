@@ -22,7 +22,7 @@ async def start_communities(
     docker: bool = False,
 ) -> None:
     event = create_event_with_signals()
-    
+
     # setup the NepheriteNode
     NepheriteNode.setup()
 
