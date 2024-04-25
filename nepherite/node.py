@@ -221,28 +221,30 @@ class NepheriteNode(Blockchain):
     def commit_blocks_to_disk(self) -> None:
         self._log("info", "Committing blocks to disk")
 
-        # find the block with enough gap
-        pt = self.current_block_hash
-        while pt != self.genesis_block_hash:
-            block = self.blockset.get(pt, None)
-            if block is None:
+        try:
+            # find the block with enough gap
+            pt = self.current_block_hash
+            while pt != self.genesis_block_hash:
+                block = self.blockset.get(pt, None)
+                if block is None:
+                    return
+                if self.current_seq_num - COMMIT_BLOCK_GAP >= block.header.seq_num:
+                    break
+            if pt == self.genesis_block_hash:
                 return
-            if self.current_seq_num - COMMIT_BLOCK_GAP >= block.header.seq_num:
-                break
-        if pt == self.genesis_block_hash:
-            return
-
-        self._log("info", f"Committing blocks from {block.header.seq_num} to disk")
-        # save blocks to disk
-        while pt != self.genesis_block_hash:
-            block = self.blockset.get(pt, None)
-            if block is None:
-                return
-            # Stop to save blocks if the block is already in disk
-            if os.path.exists(f"data/blocks/{block.header.seq_num}"):
-                break
-            self.save_block(block)
-            pt = block.header.prev_block_hash
+            
+            # save blocks to disk
+            while pt != self.genesis_block_hash:
+                block = self.blockset.get(pt, None)
+                if block is None:
+                    return
+                # Stop to save blocks if the block is already in disk
+                if os.path.exists(f"data/blocks/{block.header.seq_num}"):
+                    break
+                self.save_block(block)
+                pt = block.header.prev_block_hash
+        except Exception as e:
+            self._log("error", str(e))
 
     def make_and_sign_transaction(self, output: list[TxOut]) -> Transaction:
         payload = TransactionPayload(
