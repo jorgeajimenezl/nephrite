@@ -230,7 +230,7 @@ class NepheriteNode(Blockchain):
                 self.ez_send(peer, tx)
                 self._log(
                     "debug",
-                    f"Sent TX [{tx.sign}] with {cnt} coins to {peer.mid.hex()[:6]}",
+                    f"Sent TX [{tx.sign.hex()[:12]}] with {cnt} coins to {peer.mid.hex()[:6]}",
                 )
 
     def get_block_hash(self, header: BlockHeader) -> bytes:
