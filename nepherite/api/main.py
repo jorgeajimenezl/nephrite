@@ -1,6 +1,5 @@
 import asyncio
 import os
-import sys
 
 import uvicorn
 import yaml
@@ -61,9 +60,16 @@ async def run_blockchain(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    node_id = int(os.getenv("NODE_ID", 0))
+    node_id = int(os.getenv("NODE_ID"))
+    topology_path = os.getenv("TOPOLOGY")
 
-    with open("tests/topologies/echo.yaml") as fd:
+    if topology_path is None:
+        raise ValueError("TOPOLOGY env variable is required")
+
+    if node_id is None:
+        raise ValueError("NODE_ID env variable is required")
+
+    with open(topology_path) as fd:
         topology = yaml.safe_load(fd)
         connections = topology[node_id]
 
@@ -122,22 +128,10 @@ async def get_mempool():
     }
 
 
-def run_server(port: int):
-    uvicorn.run(app, port=port)
-
-
 if __name__ == "__main__":
-    try:
-        os.makedirs("data/keys", exist_ok=True)
-        os.makedirs("data/blocks", exist_ok=True)
+    os.makedirs("data/keys", exist_ok=True)
+    os.makedirs("data/blocks", exist_ok=True)
 
-        node_id = int(os.getenv("NODE_ID", 0))
-        port = int(os.getenv("PORT", 8000))
+    port = int(os.getenv("PORT", 8000))
 
-        with open("tests/topologies/echo.yaml") as fd:
-            topology = yaml.safe_load(fd)
-            connections = topology[node_id]
-
-        run_server(port)
-    except KeyboardInterrupt:
-        sys.exit(0)
+    uvicorn.run(app, port=port)
