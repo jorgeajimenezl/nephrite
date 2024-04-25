@@ -139,10 +139,24 @@ class NepheriteNode(Blockchain):
         pt = self.current_block_hash
         while pt != self.genesis_block_hash:
             block = self.blockset[pt]
-            blocks.append(block)
+            blocks.append(
+                {   
+                    "hash": self.get_block_hash(block.header).hex()[:12],
+                    "header": {
+                        "seq_num": block.header.seq_num,
+                        "prev_block_hash": block.header.prev_block_hash.hex()[:12],
+                        "merkle_root_hash": block.header.merkle_root_hash.hex()[:12],
+                        "timestamp": block.header.timestamp,
+                        "difficulty": block.header.difficulty,
+                        "nonce": block.header.nonce,
+                    },
+                    "transactions": [tx.sign.hex()[:12] for tx in block.transactions]
+                }
+            )
+            pt = block.header.prev_block_hash
 
-        with open("app-blocks.json", "wb") as f:
-            json.dump(blocks, f)
+        with open("app-blocks.json", "w") as f:
+            json.dump(blocks, f, indent=4)
 
     async def mining_monitor(self):
         self._log("info", "Mining monitor started")
@@ -196,13 +210,17 @@ class NepheriteNode(Blockchain):
     def create_dummy_transaction(self):
         if self._last_seq_num_for_tx == self.current_seq_num:
             return
+
         self._last_seq_num_for_tx = self.current_seq_num
         cnt = self.chainstate[self.my_peer.mid]
         if cnt < 10:
             return
         cnt = min(cnt, 10)
+        peers = self.get_peers()
+        if len(peers) == 0:
+            return
 
-        peer = random.choice(self.get_peers())  # nosec B311
+        peer = random.choice(peers)  # nosec B311
         out = [TxOut(peer.mid, cnt)]
         tx = self.make_and_sign_transaction(out)
         self.mempool[tx.sign] = tx  # add to mempool
