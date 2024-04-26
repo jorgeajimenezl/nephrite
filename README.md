@@ -25,7 +25,7 @@ poetry install
 To run the program, execute the following command:
 
 ```bash
-python -m nepherite
+python -m nepherite --node_id=ID --topology=./tests/topologies/echo.yaml --local
 ```
 
 ## TODO

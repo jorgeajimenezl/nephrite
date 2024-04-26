@@ -67,7 +67,7 @@ class NepheriteNodeTests(TestBase[NepheriteNode]):
         self.assertEqual(tx, received_messages[0])
 
         # Arrange a block
-        (block, _, _) = self.overlay(0).build_and_mine_block()
+        (block, _, _, _) = self.overlay(0).build_and_mine_block()
 
         # Send the block from node 0 to node 1 and assert that it was received
         with self.assertReceivedBy(1, [Block]) as received_messages:
