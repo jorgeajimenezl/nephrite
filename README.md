@@ -40,5 +40,5 @@ python -m nepherite
 - Jorge Jiménez <<jorgeajimenezl17@gmail.com>>
 - Mariano Rodriguez <<mjasonrc@gmail.com>>
 - Victor Lopez <<victor.98.javier@gmail.com>>
-- Samuel Suares <<samueldsr8@gmail.com>>
+- Samuel Suárez <<samueldsr8@gmail.com>>
 - Fernando Valdes <<fvaldes0109@gmail.com>>
